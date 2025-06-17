@@ -64,10 +64,10 @@ GDP_ELASTICITY_DEMAND = 1.4      # %Δ pax / %Δ real GDP
 # ----------------------
 
 st.set_page_config(page_title="Aviation ETS Scenario Simulator", layout="wide")
-st.title("✈️ Aviation ETS Scenario Simulator")
+st.title("✈️ JETPAS - Joint Economic & Traffic Policy Aviation Simulation")
 st.markdown(
-    "Simulate how different carbon‑pricing assumptions propagate through airfare costs "
-    "and affect global passenger demand."
+    "Simulate how different policies and economic developments"
+    "affect global air transport."
 )
 
 with st.sidebar:
