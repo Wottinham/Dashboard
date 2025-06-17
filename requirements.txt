@@ -1,1 +1,5 @@
-text\nstreamlit>=1.35\npandas\nplotly>=5.20\n
+streamlit>=1.35
+pandas
+plotly>=5.20
+# (optional but nice)
+numpy
