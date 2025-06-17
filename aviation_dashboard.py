@@ -67,7 +67,7 @@ st.set_page_config(page_title="Aviation ETS Scenario Simulator", layout="wide")
 st.title("✈️ JETPAS - Joint Economic & Traffic Policy Aviation Simulation")
 st.markdown(
     "Simulate how different policies and economic developments"
-    "affect global air transport."
+    " affect global air transport."
 )
 
 with st.sidebar:
