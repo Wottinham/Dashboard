@@ -15,9 +15,9 @@ GDP_ELASTICITY_DEMAND = 1.4
 # Streamlit UI
 # ----------------------
 
-st.set_page_config(page_title="Country-Level Aviation ETS Simulator", layout="wide")
-st.title("🌍 JETPAS - Country-Level Aviation ETS Scenario Simulator")
-st.markdown("Simulate how carbon pricing affects air travel between countries.")
+st.set_page_config(page_title="Country-Level Simulator", layout="wide")
+st.title("🌍 JETPAS - Joint Economic & Transport Policy Aviation Simulator")
+st.markdown("Simulate air travel between countries.")
 
 with st.sidebar:
     st.header("📈 Policy & Economic Inputs")
