@@ -56,37 +56,36 @@ with st.sidebar:
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
 
-    expected_columns = {"Origin_Country", "Destination_Country", "Passengers_2019", "Total_Fare_EUR"}
+    expected_columns = {"Origin Country", "Destination Country", "Passengers", "Avg. Total Fare(USD)"}
     if not expected_columns.issubset(df.columns):
-        st.error("CSV must contain columns: Origin_Country, Destination_Country, Passengers_2019, Total_Fare_EUR")
+        st.error("CSV must contain columns: Origin Country, Destination Country, Passengers 2019, Avg. Total Fare(USD)")
     else:
         # Compute average fare per passenger
-        df["Avg Fare (EUR)"] = df["Total_Fare_EUR"] / df["Passengers_2019"]
-        df["Avg Fare (EUR)"] = df["Avg Fare (EUR)"].fillna(0)
+        df["Avg. Total Fare(USD)"] = df["Avg. Total Fare(USD))"].fillna(0)
 
         # Compute carbon cost per passenger
         carbon_cost = ets_price * (CO2_KG_PER_PAX / 1000) * (pass_through / 100)
         df["Carbon cost per pax"] = carbon_cost
-        df["New Avg Fare"] = df["Avg Fare (EUR)"] + carbon_cost
-        df["Fare Δ (%)"] = (df["New Avg Fare"] / df["Avg Fare (EUR)"] - 1) * 100
+        df["New Avg Fare"] = df["Avg. Total Fare(USD)"] + carbon_cost
+        df["Fare Δ (%)"] = (df["New Avg Fare"] / df["Avg. Total Fare(USD)"] - 1) * 100
 
         # Elasticity-based demand model
-        fare_change_factor = (df["New Avg Fare"] / df["Avg Fare (EUR)"]).replace([np.inf, -np.inf], np.nan) ** user_price_elasticity
+        fare_change_factor = (df["New Avg Fare"] / df["Avg. Total Fare(USD)"]).replace([np.inf, -np.inf], np.nan) ** user_price_elasticity
         gdp_factor = (1 + gdp_growth / 100) ** user_gdp_elasticity
 
-        df["Passengers after policy"] = df["Passengers_2019"] * fare_change_factor * gdp_factor
-        df["Passenger Δ (%)"] = (df["Passengers after policy"] / df["Passengers_2019"] - 1) * 100
+        df["Passengers after policy"] = df["Passengers"] * fare_change_factor * gdp_factor
+        df["Passenger Δ (%)"] = (df["Passengers after policy"] / df["Passengers"] - 1) * 100
 
         # Show updated data
         st.subheader("📊 Passenger Simulation Results")
         st.dataframe(df, use_container_width=True)
 
         # Aggregate by Origin Country for chart
-        origin_summary = df.groupby("Origin_Country", as_index=False)["Passengers after policy"].sum()
+        origin_summary = df.groupby("Origin Country", as_index=False)["Passengers after policy"].sum()
 
         fig = px.bar(
             origin_summary,
-            x="Origin_Country",
+            x="Origin Country",
             y="Passengers after policy",
             title="Passenger Volume by Origin Country (After Policy)",
         )
@@ -95,7 +94,7 @@ if uploaded_file is not None:
         # Summary stats
         col1, col2 = st.columns(2)
         with col1:
-            total_passengers_2019 = df["Passengers_2019"].sum()
+            total_passengers_2019 = df["Passengers"].sum()
             total_passengers_policy = df["Passengers after policy"].sum()
             passenger_delta = (total_passengers_policy / total_passengers_2019 - 1) * 100
             st.metric(
