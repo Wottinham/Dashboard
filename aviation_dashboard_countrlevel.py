@@ -16,7 +16,7 @@ GDP_ELASTICITY_DEMAND = 1.4
 # ----------------------
 
 st.set_page_config(page_title="Country-Level Simulator", layout="wide")
-st.title("🌍 JETPAS - Joint Economic & Transport Policy Aviation Simulator")
+st.title("✈️ JETPAS - Joint Economic & Transport Policy Aviation Simulator")
 st.markdown("Simulate air travel between countries.")
 
 uploaded_file = st.sidebar.file_uploader("Upload country-pair passenger CSV", type=["csv"])
@@ -56,7 +56,7 @@ if uploaded_file is not None:
     ) / 100
 
     global_gdp_growth = st.sidebar.slider(
-        "🌍 Global Real GDP growth year‑on‑year (%)", -5.0, 8.0, 2.5, 0.1,
+        "Global Real GDP growth year‑on‑year (%)", -5.0, 8.0, 2.5, 0.1,
         help="Default GDP growth applied to all countries unless customized below."
     )
 
@@ -110,13 +110,18 @@ if uploaded_file is not None:
         "New Avg Fare", "Fare Δ (%)", "GDP Growth (%)", "Passengers after policy", "Passenger Δ (%)"
     ]], use_container_width=True)
 
+    # Calculate share of each origin country's passenger volume
     origin_summary = df.groupby("Origin Country", as_index=False)["Passengers after policy"].sum()
-
+    total_passengers_policy = origin_summary["Passengers after policy"].sum()
+    origin_summary["Passengers Share (%)"] = (origin_summary["Passengers after policy"] / total_passengers_policy) * 100
+    
+    # Plot in relative terms
     fig = px.bar(
         origin_summary,
         x="Origin Country",
-        y="Passengers after policy",
-        title="Passenger Volume by Origin Country (After Policy)",
+        y="Passengers Share (%)",
+        title="Passenger Volume Share by Origin Country (Relative to Global Total)",
+        labels={"Passengers Share (%)": "Share of Total Passengers (%)"},
     )
     st.plotly_chart(fig, use_container_width=True)
 
@@ -137,6 +142,6 @@ if uploaded_file is not None:
         "💡 Each country inherits the global GDP growth unless adjusted manually in the sidebar dropdown."
     )
 else:
-    st.warning("📁 Please upload a CSV file with country-to-country passenger and fare data.")
+    st.warning("📁 Please upload a Sabre CSV file with country-to-country passenger and fare data at yearly level. Push the arrow at the upper left side")
 
 st.caption("Data: Sabre MI · Visualization powered by Streamlit & Plotly")
