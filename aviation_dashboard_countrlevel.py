@@ -61,7 +61,7 @@ if uploaded_file is not None:
         st.error("CSV must contain columns: Origin Country, Destination Country, Passengers 2019, Avg. Total Fare(USD)")
     else:
         # Compute average fare per passenger
-        df["Avg. Total Fare(USD)"] = df["Avg. Total Fare(USD))"].fillna(0)
+        df["Avg. Total Fare(USD)"] = df["Avg. Total Fare(USD)"].fillna(0)
 
         # Compute carbon cost per passenger
         carbon_cost = ets_price * (CO2_KG_PER_PAX / 1000) * (pass_through / 100)
