@@ -33,8 +33,8 @@ if uploaded_file is not None:
         st.error("CSV must contain columns: Origin Country, Destination Country, Passengers, Avg. Total Fare(USD)")
         st.stop()
     df = df.dropna()
-    df = df[df["Origin Country"] != 00]
-    df = df[df["Destination Country"] != 00]
+    df = df[df["Origin Country"] != "00"]
+    df = df[df["Destination Country"] != "00"]
 
     df["Avg. Total Fare(USD)"] = df["Avg. Total Fare(USD)"].fillna(0)
 
