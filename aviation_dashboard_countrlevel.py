@@ -112,4 +112,4 @@ if uploaded_file is not None:
 else:
     st.warning("📁 Please upload a CSV file with country-to-country passenger and fare data.")
 
-st.caption("Model by OpenAI · Data: ICAO, IATA, IMF · Visualization powered by Streamlit & Plotly")
+st.caption("Data: Sabre MI · Visualization powered by Streamlit & Plotly")
