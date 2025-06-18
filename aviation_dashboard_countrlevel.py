@@ -110,18 +110,24 @@ if uploaded_file is not None:
         "New Avg Fare", "Fare Δ (%)", "GDP Growth (%)", "Passengers after policy", "Passenger Δ (%)"
     ]], use_container_width=True)
 
-    # Calculate share of each origin country's passenger volume
-    origin_summary = df.groupby("Origin Country", as_index=False)["Passengers after policy"].sum()
-    total_passengers_policy = origin_summary["Passengers after policy"].sum()
-    origin_summary["Passengers Share (%)"] = (origin_summary["Passengers after policy"] / total_passengers_policy) * 100
+   # Compute total base and policy passengers by origin country
+    origin_summary = df.groupby("Origin Country", as_index=False).agg({
+        "Passengers": "sum",
+        "Passengers after policy": "sum"
+    })
     
-    # Plot in relative terms
+    # Calculate relative change in %
+    origin_summary["Relative Change (%)"] = (
+        (origin_summary["Passengers after policy"] / origin_summary["Passengers"]) - 1
+    ) * 100
+    
+    # Plot relative change
     fig = px.bar(
         origin_summary,
         x="Origin Country",
-        y="Passengers Share (%)",
-        title="Passenger Volume Share by Origin Country (Relative to Global Total)",
-        labels={"Passengers Share (%)": "Share of Total Passengers (%)"},
+        y="Relative Change (%)",
+        title="Relative Change in Passenger Volume by Origin Country (%)",
+        labels={"Relative Change (%)": "Change in Passengers (%)"},
     )
     st.plotly_chart(fig, use_container_width=True)
 
