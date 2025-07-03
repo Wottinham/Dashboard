@@ -90,6 +90,29 @@ ets_price = st.sidebar.slider(
     help="Select the carbon price applied to aviation emissions.",
 )
 
+# ----------------------
+# Carbon policy target countries
+# ----------------------
+st.sidebar.markdown("### Apply CO₂ Price to Selected Countries")
+all_origin_countries = sorted(df["Origin Country Name"].unique())
+
+apply_to_all = st.sidebar.checkbox("Select all", value=True)
+
+if apply_to_all:
+    selected_countries = st.sidebar.multiselect(
+        "Countries with CO₂ pricing:",
+        all_origin_countries,
+        default=all_origin_countries,
+        key="country_selector"
+    )
+else:
+    selected_countries = st.sidebar.multiselect(
+        "Countries with CO₂ pricing:",
+        all_origin_countries,
+        default=[],
+        key="country_selector"
+    )
+
 pass_through = (
     st.sidebar.slider(
         "Cost pass-through to fares (%)",
@@ -131,10 +154,16 @@ with st.sidebar.expander("Customize GDP Growth for Specific Countries"):
         )
 
 # ----------------------
-# Carbon cost per passenger
+# Carbon cost per passenger (conditional by country)
 # ----------------------
 df["CO2 per pax (kg)"] = df["Distance (km)"] * EMISSION_FACTOR
-df["Carbon cost per pax"] = (df["CO2 per pax (kg)"] / 1000) * ets_price * pass_through
+
+df["Carbon cost per pax"] = 0.0
+mask_selected = df["Origin Country Name"].isin(selected_countries)
+df.loc[mask_selected, "Carbon cost per pax"] = (
+    (df.loc[mask_selected, "CO2 per pax (kg)"] / 1000) * ets_price * pass_through
+)
+
 df["New Avg Fare"] = df["Avg. Total Fare(USD)"] + df["Carbon cost per pax"]
 df["Fare Δ (%)"] = (df["New Avg Fare"] / df["Avg. Total Fare(USD)"] - 1) * 100
 
