@@ -25,8 +25,8 @@ def load_dummy_data() -> pd.DataFrame:
                 continue
             rows.append(
                 {
-                    "Origin Country": o,
-                    "Destination Country": d,
+                    "Origin Country Name": o,
+                    "Destination Country Name": d,
                     "Origin Airport": f"{o[:3].upper()}-INTL",
                     "Destination Airport": f"{d[:3].upper()}-INTL",
                     "Distance (km)": int(rng.integers(500, 9000)),
@@ -64,13 +64,13 @@ else:
 # ----------------------
 
 expected_columns = {
-    "Origin Country", "Destination Country",
+    "Origin Country Name", "Destination Country Name",
     "Origin Airport", "Destination Airport",
     "Distance (km)", "Passengers", "Avg. Total Fare(USD)"
 }
 if not expected_columns.issubset(df.columns):
     st.error(
-        "CSV must contain columns: Origin Country, Destination Country, "
+        "CSV must contain columns: Origin Country, Destination Country Name, "
         "Origin Airport, Destination Airport, Distance (km), "
         "Passengers, Avg. Total Fare(USD)"
     )
