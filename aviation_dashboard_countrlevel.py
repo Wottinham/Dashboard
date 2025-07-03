@@ -170,7 +170,7 @@ st.dataframe(
 )
 
 # Aggregate by origin country
-origin_summary = df.groupby("Origin Country", as_index=False).agg(
+origin_summary = df.groupby("Origin Country Name", as_index=False).agg(
     {
         "Passengers": "sum",
         "Passengers after policy": "sum",
