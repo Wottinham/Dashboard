@@ -162,7 +162,7 @@ df["CO2 per pax (kg)"] = df["Distance (km)"] * EMISSION_FACTOR
 df["Carbon cost per pax"] = 0.0
 
 mask = (
-    df["Origin Country Name"].isin(selected_origin_countries) |
+    df["Origin Country Name"].isin(selected_origin_countries) &
     df["Destination Country Name"].isin(selected_dest_countries)
 )
 
