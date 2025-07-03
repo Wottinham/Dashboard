@@ -146,7 +146,7 @@ fare_factor = (
     .replace([np.inf, -np.inf], np.nan)
     ** user_price_elasticity
 )
-df["GDP Growth (%)"] = df["Origin Country"].map(gdp_growth_by_country).fillna(global_gdp_growth)
+df["GDP Growth (%)"] = df["Origin Country Name"].map(gdp_growth_by_country).fillna(global_gdp_growth)
 df["GDP Growth Factor"] = (1 + df["GDP Growth (%)"] / 100) ** user_gdp_elasticity
 
 df["Passengers after policy"] = df["Passengers"] * fare_factor * df["GDP Growth Factor"]
