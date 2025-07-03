@@ -70,7 +70,7 @@ expected_columns = {
 }
 if not expected_columns.issubset(df.columns):
     st.error(
-        "CSV must contain columns: Origin Country, Destination Country Name, "
+        "CSV must contain columns: Origin Country Name, Destination Country Name, "
         "Origin Airport, Destination Airport, Distance (km), "
         "Passengers, Avg. Total Fare(USD)"
     )
@@ -122,7 +122,7 @@ user_gdp_elasticity = st.sidebar.slider(
 st.sidebar.markdown("### Optional: Adjust GDP Growth by Origin Country")
 gdp_growth_by_country = {}
 with st.sidebar.expander("Customize GDP Growth for Specific Countries"):
-    origin_countries = df["Origin Country"].dropna().unique()
+    origin_countries = df["Origin Country Name"].dropna().unique()
     for country in sorted(origin_countries):
         gdp_growth_by_country[country] = st.slider(
             f"{country}",
@@ -160,7 +160,7 @@ st.dataframe(
     df[
         [
             "Origin Airport", "Destination Airport",
-            "Origin Country", "Destination Country",
+            "Origin Country Name", "Destination Country Name",
             "Passengers", "Distance (km)", "CO2 per pax (kg)",
             "Avg. Total Fare(USD)", "Carbon cost per pax",
             "New Avg Fare", "Passengers after policy", "Passenger Δ (%)"
@@ -183,7 +183,7 @@ origin_summary["Relative Change (%)"] = (
 
 fig = px.bar(
     origin_summary,
-    x="Origin Country",
+    x="Origin Country Name",
     y="Relative Change (%)",
     title="Relative Change in Passenger Volume by Origin Country (%)",
     labels={"Relative Change (%)": "Change in Passengers (%)"},
