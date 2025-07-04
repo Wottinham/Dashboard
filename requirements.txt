@@ -1,8 +1,5 @@
-pyarrow
-streamlit
+streamlit>=1.35
 pandas
-plotly
+plotly>=5.20
 # (optional but nice)
 numpy
-keplergl
-
