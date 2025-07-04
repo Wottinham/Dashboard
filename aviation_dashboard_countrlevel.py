@@ -68,7 +68,7 @@ df = df.dropna(subset=expected_columns)
 df["Avg. Total Fare(USD)"] = df["Avg. Total Fare(USD)"].fillna(0.0)
 
 origin_all = sorted(df["Origin Country Name"].unique())
-dest_all = sorted(df["Destination Country Name"].unique())
+dest_all   = sorted(df["Destination Country Name"].unique())
 
 # ----------------------
 # Carbon Pricing Policy
@@ -76,23 +76,27 @@ dest_all = sorted(df["Destination Country Name"].unique())
 st.sidebar.markdown("### Carbon Pricing Policy")
 carbon_policy = st.sidebar.selectbox(
     "Enable carbon pricing?",
-    ["Disable", "Enable"]
+    ["Disable", "Enable"],
+    key="carbon_enable"
 )
 if carbon_policy == "Enable":
     ets_price = st.sidebar.slider(
         "Carbon price (EUR / tCO₂)",
         0, 400, 100, 5,
+        key="carbon_price",
         help="Select the carbon price applied to aviation emissions."
     )
     carbon_origin_countries = st.sidebar.multiselect(
-        "Origin countries taxed:",
+        "Origin countries taxed (carbon):",
         origin_all,
-        default=origin_all
+        default=origin_all,
+        key="carbon_origin"
     )
     carbon_dest_countries = st.sidebar.multiselect(
-        "Destination countries taxed:",
+        "Destination countries taxed (carbon):",
         dest_all,
-        default=dest_all
+        default=dest_all,
+        key="carbon_dest"
     )
 else:
     ets_price = 0.0
@@ -100,50 +104,54 @@ else:
     carbon_dest_countries = []
 
 # ----------------------
-# Tax
+# Passenger Tax Policy
 # ----------------------
-st.sidebar.markdown("### Passenger Tax")
-
-# Air Passenger Tax Policy
+st.sidebar.markdown("### Passenger Tax Policy")
 tax_policy = st.sidebar.selectbox(
     "Enable air passenger tax?",
-    ["Disable", "Enable"]
+    ["Disable", "Enable"],
+    key="tax_enable"
 )
 if tax_policy == "Enable":
     air_passenger_tax = st.sidebar.slider(
         "Air Passenger Tax (USD)",
         0, 100, 0, 1,
+        key="ticket_tax",
         help="Flat additional tax added to each ticket fare."
     )
     tax_origin_countries = st.sidebar.multiselect(
-        "Origin countries taxed:",
+        "Origin countries taxed (tax):",
         origin_all,
-        default=origin_all
+        default=origin_all,
+        key="tax_origin"
     )
     tax_dest_countries = st.sidebar.multiselect(
-        "Destination countries taxed:",
+        "Destination countries taxed (tax):",
         dest_all,
-        default=dest_all
+        default=dest_all,
+        key="tax_dest"
     )
 else:
     air_passenger_tax = 0.0
     tax_origin_countries = []
     tax_dest_countries = []
 
+# ----------------------
+# Parameters
+# ----------------------
 st.sidebar.markdown("### Parameters")
-
-# Cost pass-through to fares (applies to both CO₂ price & tax)
 pass_through = st.sidebar.slider(
     "Cost pass-through to fares (%)",
     0, 100, 80, 5,
-    help="Share of carbon cost and ticket tax airlines embed in ticket prices."
+    help="Share of carbon cost and ticket tax airlines embed in ticket prices.",
+    key="pass_through"
 ) / 100
 
-# Emission factor slider
 emission_factor = st.sidebar.slider(
     "Emission factor (kg CO₂ per pax-km)",
     0.0, 1.0, 0.115, 0.001,
-    help="Kilograms of CO₂ emitted per passenger-kilometer flown."
+    help="Kilograms of CO₂ emitted per passenger-kilometer flown.",
+    key="emission_factor"
 )
 
 # ----------------------
@@ -152,17 +160,20 @@ emission_factor = st.sidebar.slider(
 global_gdp_growth = st.sidebar.slider(
     "Global Real GDP growth year-on-year (%)",
     -5.0, 8.0, 2.5, 0.1,
-    help="Default GDP growth applied to all unless customized."
+    help="Default GDP growth applied to all unless customized.",
+    key="gdp_global"
 )
 user_price_elasticity = st.sidebar.slider(
     "Demand price-elasticity (negative)",
     -2.0, -0.1, PRICE_ELASTICITY_DEMAND, 0.1,
-    help="Passenger response to fare increases."
+    help="Passenger response to fare increases.",
+    key="price_elast"
 )
 user_gdp_elasticity = st.sidebar.slider(
     "Demand GDP-elasticity",
     0.5, 2.0, GDP_ELASTICITY_DEMAND, 0.1,
-    help="Passenger response to GDP growth."
+    help="Passenger response to GDP growth.",
+    key="gdp_elast"
 )
 
 st.sidebar.markdown("### Optional: Adjust GDP Growth by Origin Country")
@@ -192,7 +203,7 @@ if carbon_policy == "Enable":
         * ets_price * pass_through
     )
 
-# Air passenger tax per pax (passed through)
+# Air passenger tax per pax
 df["Air passenger tax per pax"] = 0.0
 if tax_policy == "Enable":
     mask_t = (
@@ -212,10 +223,11 @@ df["Fare Δ (%)"] = (
 ) * 100
 
 # Elasticity & GDP adjustments
-fare_factor = (
-    (df["New Avg Fare"] / df["Avg. Total Fare(USD)"])
-    .replace([np.inf, -np.inf], np.nan) ** user_price_elasticity
-)
+fare_ratio = df["New Avg Fare"] / df["Avg. Total Fare(USD)"]
+# avoid inf/nan issues
+fare_ratio = fare_ratio.replace([np.inf, -np.inf], np.nan).fillna(1)
+fare_factor = fare_ratio**user_price_elasticity
+
 df["GDP Growth (%)"] = (
     df["Origin Country Name"]
     .map(gdp_growth_by_country)
