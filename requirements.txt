@@ -1,8 +1,8 @@
-pyarrow
+pyarrow==12.0.1
 streamlit>=1.35
 pandas
 plotly>=5.20
 # (optional but nice)
 numpy
 keplergl
-cmake
+
