@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+from keplergl import KeplerGl
+from streamlit_keplergl import keplergl_static
 
 # ----------------------
 # Model configuration (defaults)
@@ -29,6 +31,10 @@ def load_dummy_data() -> pd.DataFrame:
                 "Distance (km)": int(rng.integers(500, 9000)),
                 "Passengers": int(rng.integers(50000, 1000000)),
                 "Avg. Total Fare(USD)": round(rng.uniform(150, 700), 2),
+                "Origin Lat": rng.uniform(-50, 60),
+                "Origin Lon": rng.uniform(-130, 130),
+                "Destination Lat": rng.uniform(-50, 60),
+                "Destination Lon": rng.uniform(-130, 130),
             })
     return pd.DataFrame(rows)
 
@@ -68,69 +74,31 @@ df = df.dropna(subset=expected_columns)
 df["Avg. Total Fare(USD)"] = df["Avg. Total Fare(USD)"].fillna(0.0)
 
 origin_all = sorted(df["Origin Country Name"].unique())
-dest_all   = sorted(df["Destination Country Name"].unique())
+dest_all = sorted(df["Destination Country Name"].unique())
 
 # ----------------------
 # Carbon Pricing Policy
 # ----------------------
 st.sidebar.markdown("### Carbon Pricing Policy")
-carbon_policy = st.sidebar.selectbox(
-    "Enable carbon pricing?",
-    ["Disable", "Enable"],
-    key="carbon_enable"
-)
+carbon_policy = st.sidebar.selectbox("Enable carbon pricing?", ["Disable", "Enable"])
 if carbon_policy == "Enable":
-    ets_price = st.sidebar.slider(
-        "Carbon price (EUR / tCO₂)",
-        0, 400, 100, 5,
-        key="carbon_price",
-        help="Select the carbon price applied to aviation emissions."
-    )
-    carbon_origin_countries = st.sidebar.multiselect(
-        "Origin countries taxed (carbon):",
-        origin_all,
-        default=origin_all,
-        key="carbon_origin"
-    )
-    carbon_dest_countries = st.sidebar.multiselect(
-        "Destination countries taxed (carbon):",
-        dest_all,
-        default=dest_all,
-        key="carbon_dest"
-    )
+    ets_price = st.sidebar.slider("Carbon price (EUR / tCO₂)", 0, 400, 100, 5)
+    carbon_origin_countries = st.sidebar.multiselect("Origin countries taxed:", origin_all, default=origin_all)
+    carbon_dest_countries = st.sidebar.multiselect("Destination countries taxed:", dest_all, default=dest_all)
 else:
     ets_price = 0.0
     carbon_origin_countries = []
     carbon_dest_countries = []
 
 # ----------------------
-# Passenger Tax Policy
+# Tax
 # ----------------------
-st.sidebar.markdown("### Passenger Tax Policy")
-tax_policy = st.sidebar.selectbox(
-    "Enable air passenger tax?",
-    ["Disable", "Enable"],
-    key="tax_enable"
-)
+st.sidebar.markdown("### Passenger Tax")
+tax_policy = st.sidebar.selectbox("Enable air passenger tax?", ["Disable", "Enable"])
 if tax_policy == "Enable":
-    air_passenger_tax = st.sidebar.slider(
-        "Air Passenger Tax (USD)",
-        0, 100, 0, 1,
-        key="ticket_tax",
-        help="Flat additional tax added to each ticket fare."
-    )
-    tax_origin_countries = st.sidebar.multiselect(
-        "Origin countries taxed (tax):",
-        origin_all,
-        default=origin_all,
-        key="tax_origin"
-    )
-    tax_dest_countries = st.sidebar.multiselect(
-        "Destination countries taxed (tax):",
-        dest_all,
-        default=dest_all,
-        key="tax_dest"
-    )
+    air_passenger_tax = st.sidebar.slider("Air Passenger Tax (USD)", 0, 100, 0, 1)
+    tax_origin_countries = st.sidebar.multiselect("Origin countries taxed:", origin_all, default=origin_all)
+    tax_dest_countries = st.sidebar.multiselect("Destination countries taxed:", dest_all, default=dest_all)
 else:
     air_passenger_tax = 0.0
     tax_origin_countries = []
@@ -140,70 +108,45 @@ else:
 # Parameters
 # ----------------------
 st.sidebar.markdown("### Parameters")
+
 pass_through = st.sidebar.slider(
-    "Cost pass-through to fares (%)",
-    0, 100, 80, 5,
-    help="Share of carbon cost and ticket tax airlines embed in ticket prices.",
-    key="pass_through"
+    "Cost pass-through to fares (%)", 0, 100, 80, 5
 ) / 100
 
 emission_factor = st.sidebar.slider(
-    "Emission factor (kg CO₂ per pax-km)",
-    0.0, 1.0, 0.115, 0.001,
-    help="Kilograms of CO₂ emitted per passenger-kilometer flown.",
-    key="emission_factor"
+    "Emission factor (kg CO₂ per pax-km)", 0.0, 1.0, 0.115, 0.001
 )
 
 # ----------------------
 # Other Economic Inputs
 # ----------------------
-global_gdp_growth = st.sidebar.slider(
-    "Global Real GDP growth year-on-year (%)",
-    -5.0, 8.0, 2.5, 0.1,
-    help="Default GDP growth applied to all unless customized.",
-    key="gdp_global"
-)
-user_price_elasticity = st.sidebar.slider(
-    "Demand price-elasticity (negative)",
-    -2.0, -0.1, PRICE_ELASTICITY_DEMAND, 0.1,
-    help="Passenger response to fare increases.",
-    key="price_elast"
-)
-user_gdp_elasticity = st.sidebar.slider(
-    "Demand GDP-elasticity",
-    0.5, 2.0, GDP_ELASTICITY_DEMAND, 0.1,
-    help="Passenger response to GDP growth.",
-    key="gdp_elast"
-)
+global_gdp_growth = st.sidebar.slider("Global Real GDP growth (%)", -5.0, 8.0, 2.5, 0.1)
+user_price_elasticity = st.sidebar.slider("Demand price-elasticity", -2.0, -0.1, PRICE_ELASTICITY_DEMAND, 0.1)
+user_gdp_elasticity = st.sidebar.slider("Demand GDP-elasticity", 0.5, 2.0, GDP_ELASTICITY_DEMAND, 0.1)
 
 st.sidebar.markdown("### Optional: Adjust GDP Growth by Origin Country")
 gdp_growth_by_country = {}
 with st.sidebar.expander("Customize GDP Growth for Specific Countries"):
     for country in origin_all:
         gdp_growth_by_country[country] = st.slider(
-            f"{country} GDP growth (%)",
-            -5.0, 8.0, global_gdp_growth, 0.1,
-            key=f"gdp_{country}"
+            f"{country} GDP growth (%)", -5.0, 8.0, global_gdp_growth, 0.1, key=f"gdp_{country}"
         )
 
 # ----------------------
 # Policy calculations
 # ----------------------
 df["CO2 per pax (kg)"] = df["Distance (km)"] * emission_factor
-
-# Carbon cost per pax
 df["Carbon cost per pax"] = 0.0
+
 if carbon_policy == "Enable":
     mask_c = (
         df["Origin Country Name"].isin(carbon_origin_countries) &
         df["Destination Country Name"].isin(carbon_dest_countries)
     )
     df.loc[mask_c, "Carbon cost per pax"] = (
-        df.loc[mask_c, "CO2 per pax (kg)"] / 1000
-        * ets_price * pass_through
+        df.loc[mask_c, "CO2 per pax (kg)"] / 1000 * ets_price * pass_through
     )
 
-# Air passenger tax per pax
 df["Air passenger tax per pax"] = 0.0
 if tax_policy == "Enable":
     mask_t = (
@@ -212,85 +155,78 @@ if tax_policy == "Enable":
     )
     df.loc[mask_t, "Air passenger tax per pax"] = air_passenger_tax * pass_through
 
-# New fare including policies
-df["New Avg Fare"] = (
-    df["Avg. Total Fare(USD)"]
-    + df["Carbon cost per pax"]
-    + df["Air passenger tax per pax"]
-)
-df["Fare Δ (%)"] = (
-    df["New Avg Fare"] / df["Avg. Total Fare(USD)"] - 1
-) * 100
+df["New Avg Fare"] = df["Avg. Total Fare(USD)"] + df["Carbon cost per pax"] + df["Air passenger tax per pax"]
+df["Fare Δ (%)"] = (df["New Avg Fare"] / df["Avg. Total Fare(USD)"] - 1) * 100
 
-# Elasticity & GDP adjustments
-fare_ratio = df["New Avg Fare"] / df["Avg. Total Fare(USD)"]
-# avoid inf/nan issues
-fare_ratio = fare_ratio.replace([np.inf, -np.inf], np.nan).fillna(1)
-fare_factor = fare_ratio**user_price_elasticity
-
-df["GDP Growth (%)"] = (
-    df["Origin Country Name"]
-    .map(gdp_growth_by_country)
-    .fillna(global_gdp_growth)
-)
+fare_factor = (df["New Avg Fare"] / df["Avg. Total Fare(USD)"]).replace([np.inf, -np.inf], np.nan) ** user_price_elasticity
+df["GDP Growth (%)"] = df["Origin Country Name"].map(gdp_growth_by_country).fillna(global_gdp_growth)
 df["GDP Growth Factor"] = (1 + df["GDP Growth (%)"] / 100) ** user_gdp_elasticity
 
-df["Passengers after policy"] = (
-    df["Passengers"] * fare_factor * df["GDP Growth Factor"]
-)
-df["Passenger Δ (%)"] = (
-    df["Passengers after policy"] / df["Passengers"] - 1
-) * 100
+df["Passengers after policy"] = df["Passengers"] * fare_factor * df["GDP Growth Factor"]
+df["Passenger Δ (%)"] = (df["Passengers after policy"] / df["Passengers"] - 1) * 100
 
 # ----------------------
-# Output
+# Output Table
 # ----------------------
 st.subheader("📊 Passenger Simulation Results (Airport-Pair Level)")
-st.dataframe(
-    df[[
-        "Origin Airport", "Destination Airport",
-        "Origin Country Name", "Destination Country Name",
-        "Passengers", "Distance (km)", "CO2 per pax (kg)",
-        "Avg. Total Fare(USD)", "Carbon cost per pax",
-        "Air passenger tax per pax", "New Avg Fare",
-        "Passengers after policy", "Passenger Δ (%)"
-    ]],
-    use_container_width=True
-)
+st.dataframe(df[[
+    "Origin Airport", "Destination Airport",
+    "Origin Country Name", "Destination Country Name",
+    "Passengers", "Distance (km)", "CO2 per pax (kg)",
+    "Avg. Total Fare(USD)", "Carbon cost per pax", "Air passenger tax per pax",
+    "New Avg Fare", "Passengers after policy", "Passenger Δ (%)"
+]], use_container_width=True)
 
-# Aggregate by origin country
+# ----------------------
+# Bar Chart
+# ----------------------
 origin_summary = df.groupby("Origin Country Name", as_index=False).agg({
     "Passengers": "sum",
     "Passengers after policy": "sum",
     "CO2 per pax (kg)": "mean",
 })
 origin_summary["Relative Change (%)"] = (
-    origin_summary["Passengers after policy"] /
-    origin_summary["Passengers"] - 1
+    origin_summary["Passengers after policy"] / origin_summary["Passengers"] - 1
 ) * 100
 
 fig = px.bar(
     origin_summary,
-    x="Origin Country Name",
-    y="Relative Change (%)",
-    title="Relative Change in Passenger Volume by Origin Country (%)",
-    labels={"Relative Change (%)": "Change in Passengers (%)"},
+    x="Origin Country Name", y="Relative Change (%)",
+    title="Relative Change in Passenger Volume by Origin Country (%)"
 )
 st.plotly_chart(fig, use_container_width=True)
 
+# ----------------------
+# Metrics
+# ----------------------
 col1, col2 = st.columns(2)
 with col1:
     base_total = df["Passengers"].sum()
     new_total = df["Passengers after policy"].sum()
     delta_pct = (new_total / base_total - 1) * 100
-    st.metric(
-        "Total Passengers (m)",
-        f"{new_total/1e6:,.2f} M",
-        delta=f"{delta_pct:+.1f}% vs base",
-    )
+    st.metric("Total Passengers (m)", f"{new_total/1e6:,.2f} M", delta=f"{delta_pct:+.1f}% vs base")
 with col2:
     avg_cc = df["Carbon cost per pax"].mean()
     st.metric("Avg Carbon Cost per Ticket", f"€{avg_cc:.2f}")
 
+# ----------------------
+# Kepler Map
+# ----------------------
+st.subheader("🗺️ Air Traffic Flow Changes (Kepler Map)")
+kepler_data = df[[
+    "Origin Lon", "Origin Lat", "Destination Lon", "Destination Lat", "Passenger Δ (%)"
+]].rename(columns={
+    "Origin Lon": "longitude", "Origin Lat": "latitude",
+    "Destination Lon": "to_longitude", "Destination Lat": "to_latitude"
+})
+kepler_data["Passenger Δ (%)"] = df["Passenger Δ (%)"]
+
+kepler_map = KeplerGl(height=600)
+kepler_map.add_data(data=kepler_data, name="Air Traffic")
+keplergl_static(kepler_map)
+
+# ----------------------
+# Footer
+# ----------------------
 st.info("💡 Each country inherits the global GDP growth unless adjusted manually.")
-st.caption("Data: Sabre MI (or dummy) · Visualization powered by Streamlit & Plotly")
+st.caption("Data: Sabre MI (or dummy) · Visualization powered by Streamlit, Plotly, and Kepler.gl")
