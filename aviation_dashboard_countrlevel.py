@@ -6,7 +6,6 @@ import plotly.express as px
 # ----------------------
 # Model configuration (defaults)
 # ----------------------
-DEFAULT_EMISSION_FACTOR = 0.115  # kg CO₂ per pax-km
 PRICE_ELASTICITY_DEMAND = -0.8
 GDP_ELASTICITY_DEMAND = 1.4
 
@@ -68,7 +67,6 @@ if not expected_columns.issubset(df.columns):
 df = df.dropna(subset=expected_columns)
 df["Avg. Total Fare(USD)"] = df["Avg. Total Fare(USD)"].fillna(0.0)
 
-# Prepare country lists
 origin_all = sorted(df["Origin Country Name"].unique())
 dest_all = sorted(df["Destination Country Name"].unique())
 
@@ -101,19 +99,12 @@ else:
     carbon_origin_countries = []
     carbon_dest_countries = []
 
-# Cost pass-through (always visible)
-pass_through = (
-    st.sidebar.slider(
-        "Cost pass-through to fares (%)",
-        0, 100, 80, 5,
-        help="Share of carbon cost airlines embed in ticket prices."
-    ) / 100
-)
+# ----------------------
+# Parameters
+# ----------------------
+st.sidebar.markdown("### Parameters")
 
-# ----------------------
 # Air Passenger Tax Policy
-# ----------------------
-st.sidebar.markdown("### Air Passenger Tax Policy")
 tax_policy = st.sidebar.selectbox(
     "Enable air passenger tax?",
     ["Disable", "Enable"]
@@ -138,6 +129,20 @@ else:
     air_passenger_tax = 0.0
     tax_origin_countries = []
     tax_dest_countries = []
+
+# Cost pass-through to fares (applies to both CO₂ price & tax)
+pass_through = st.sidebar.slider(
+    "Cost pass-through to fares (%)",
+    0, 100, 80, 5,
+    help="Share of carbon cost and ticket tax airlines embed in ticket prices."
+) / 100
+
+# Emission factor slider
+emission_factor = st.sidebar.slider(
+    "Emission factor (kg CO₂ per pax-km)",
+    0.0, 1.0, 0.115, 0.001,
+    help="Kilograms of CO₂ emitted per passenger-kilometer flown."
+)
 
 # ----------------------
 # Other Economic Inputs
@@ -171,8 +176,7 @@ with st.sidebar.expander("Customize GDP Growth for Specific Countries"):
 # ----------------------
 # Policy calculations
 # ----------------------
-# Emissions per pax
-df["CO2 per pax (kg)"] = df["Distance (km)"] * DEFAULT_EMISSION_FACTOR
+df["CO2 per pax (kg)"] = df["Distance (km)"] * emission_factor
 
 # Carbon cost per pax
 df["Carbon cost per pax"] = 0.0
@@ -186,14 +190,14 @@ if carbon_policy == "Enable":
         * ets_price * pass_through
     )
 
-# Air passenger tax per pax
+# Air passenger tax per pax (passed through)
 df["Air passenger tax per pax"] = 0.0
 if tax_policy == "Enable":
     mask_t = (
         df["Origin Country Name"].isin(tax_origin_countries) &
         df["Destination Country Name"].isin(tax_dest_countries)
     )
-    df.loc[mask_t, "Air passenger tax per pax"] = air_passenger_tax
+    df.loc[mask_t, "Air passenger tax per pax"] = air_passenger_tax * pass_through
 
 # New fare including policies
 df["New Avg Fare"] = (
@@ -201,8 +205,6 @@ df["New Avg Fare"] = (
     + df["Carbon cost per pax"]
     + df["Air passenger tax per pax"]
 )
-
-# Fare percentage change
 df["Fare Δ (%)"] = (
     df["New Avg Fare"] / df["Avg. Total Fare(USD)"] - 1
 ) * 100
