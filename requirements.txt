@@ -3,3 +3,5 @@ pandas
 plotly>=5.20
 # (optional but nice)
 numpy
+keplergl
+streamlit-keplergl
