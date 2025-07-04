@@ -301,24 +301,75 @@ st.info("💡 Each country inherits the global GDP growth unless adjusted manual
 st.caption("Data: Sabre MI (or dummy) · Visualization by Streamlit & Plotly")
 
 # ----------------------
-# Kepler map
+# Kepler map with lines
 # ----------------------
 coords_required = ["Origin Lat", "Origin Lon", "Dest Lat", "Dest Lon"]
 kepler_df = df.dropna(subset=coords_required).copy()
 
 if not kepler_df.empty:
     st.subheader("🌍 Air Traffic Change Map")
+
+    # rename for kepler
     kepler_df = kepler_df.rename(
         columns={
             "Origin Lat": "origin_lat",
             "Origin Lon": "origin_lng",
             "Dest Lat":   "dest_lat",
             "Dest Lon":   "dest_lng",
-            "Passenger Δ (%)": "traffic_change"
+            "Origin Airport":      "origin_airport",
+            "Destination Airport": "dest_airport",
+            "Passenger Δ (%)":     "traffic_change",
         }
     )
-    m = KeplerGl(height=600)
+
+    # Kepler config: one 'line' layer
+    kepler_config = {
+        "version": "v1",
+        "config": {
+            "visState": {
+                "layers": [
+                    {
+                        "id": "air-traffic-lines",
+                        "type": "line",
+                        "config": {
+                            "dataId": "Air Traffic Change",
+                            "label": "Traffic Δ Lines",
+                            "color": [255, 153, 31],
+                            "columns": {
+                                "lat0": "origin_lat",
+                                "lng0": "origin_lng",
+                                "lat1": "dest_lat",
+                                "lng1": "dest_lng"
+                            },
+                            "isVisible": True,
+                            "visConfig": {
+                                "opacity": 0.8,
+                                "thickness": 4,
+                                "colorField": {"name": "traffic_change", "type": "real"},
+                                "colorScale": "quantile"
+                            }
+                        }
+                    }
+                ],
+                "interactionConfig": {
+                    "tooltip": {
+                        "fieldsToShow": {
+                            "Air Traffic Change": [
+                                {"name": "origin_airport", "fieldIdx": 0},
+                                {"name": "dest_airport",   "fieldIdx": 1},
+                                {"name": "traffic_change", "fieldIdx": 2}
+                            ]
+                        }
+                    }
+                },
+                "layerBlending": "normal"
+            }
+        }
+    }
+
+    m = KeplerGl(config=kepler_config, height=600)
     m.add_data(data=kepler_df, name="Air Traffic Change")
     keplergl_static(m)
+
 elif coord_file:
     st.warning("❌ No matching airport coords found – map not rendered.")
