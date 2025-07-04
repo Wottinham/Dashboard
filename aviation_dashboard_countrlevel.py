@@ -223,9 +223,9 @@ if coord_file:
         coords_df = pd.read_excel(coord_file, engine="openpyxl")
         if {"IATA_Code", "DecLat", "DecLon"}.issubset(coords_df.columns):
             coords_map = coords_df.set_index("IATA_Code")[["DecLat", "DecLon"]]
-            # extract code from "XXX-INTL"
-            df["Origin_Code"] = df["Origin Airport"].str.split("-", 1).str[0]
-            df["Dest_Code"]   = df["Destination Airport"].str.split("-", 1).str[0]
+            # --- FIX: explicitly name pat, n, expand ---
+            df["Origin_Code"] = df["Origin Airport"].str.split(pat="-", n=1, expand=False).str[0]
+            df["Dest_Code"]   = df["Destination Airport"].str.split(pat="-", n=1, expand=False).str[0]
             df["Origin Lat"] = df["Origin_Code"].map(coords_map["DecLat"])
             df["Origin Lon"] = df["Origin_Code"].map(coords_map["DecLon"])
             df["Dest Lat"]   = df["Dest_Code"].map(coords_map["DecLat"])
@@ -290,15 +290,15 @@ with col2:
 st.info("💡 Each country inherits the global GDP growth unless adjusted manually.")
 st.caption("Data: Sabre MI (or dummy) · Visualization by Streamlit & Plotly")
 
-# Kepler map (only if all four coord columns exist)
+# Kepler map (only if coords are present)
 coords_required = {"Origin Lat", "Origin Lon", "Dest Lat", "Dest Lon"}
 if coords_required.issubset(df.columns):
     st.subheader("🌍 Air Traffic Change Map")
     kepler_df = df.dropna(subset=list(coords_required)).copy()
-    kepler_df["origin_lat"]   = kepler_df["Origin Lat"]
-    kepler_df["origin_lng"]   = kepler_df["Origin Lon"]
-    kepler_df["dest_lat"]     = kepler_df["Dest Lat"]
-    kepler_df["dest_lng"]     = kepler_df["Dest Lon"]
+    kepler_df["origin_lat"]    = kepler_df["Origin Lat"]
+    kepler_df["origin_lng"]    = kepler_df["Origin Lon"]
+    kepler_df["dest_lat"]      = kepler_df["Dest Lat"]
+    kepler_df["dest_lng"]      = kepler_df["Dest Lon"]
     kepler_df["traffic_change"] = kepler_df["Passenger Δ (%)"]
 
     m = KeplerGl(height=600)
