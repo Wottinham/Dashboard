@@ -55,10 +55,10 @@ coord_file = st.sidebar.file_uploader(
 # ----------------------
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
-    st.success("✅ CSV loaded.")
+    st.success("✅ Passenger CSV loaded.")
 else:
     df = load_dummy_data()
-    st.info("🛈 No file uploaded – using **dummy data**.")
+    st.info("🛈 No passenger CSV – using **dummy data**.")
 
 # Validate required columns
 required_cols = {
@@ -67,12 +67,12 @@ required_cols = {
     "Distance (km)", "Passengers", "Avg. Total Fare(USD)"
 }
 if not required_cols.issubset(df.columns):
-    st.error("CSV missing required columns.")
+    st.error("Passenger CSV missing required columns.")
     st.stop()
-df = df.dropna(subset=required_cols).reset_index(drop=True)
 
+df = df.dropna(subset=required_cols).reset_index(drop=True)
 origin_all = sorted(df["Origin Country Name"].unique())
-dest_all = sorted(df["Destination Country Name"].unique())
+dest_all   = sorted(df["Destination Country Name"].unique())
 
 # ----------------------
 # Carbon pricing policy
@@ -215,31 +215,23 @@ df["Passenger Δ (%)"] = (
 ) * 100
 
 # ----------------------
-# Optional: load & join coordinates
+# OPTIONAL: load & join coordinates
 # ----------------------
 if coord_file:
     try:
         coords_df = pd.read_excel(coord_file, engine="openpyxl")
-        # only keep first row per IATA_Code
         coords_df = coords_df.drop_duplicates(subset=["IATA_Code"])
         if {"IATA_Code", "DecLat", "DecLon"}.issubset(coords_df.columns):
             coords_map = coords_df.set_index("IATA_Code")[["DecLat", "DecLon"]]
-            df["Origin_Code"] = (
-                df["Origin Airport"]
-                  .str.split(pat="-", n=1, expand=False)
-                  .str[0]
-            )
-            df["Dest_Code"] = (
-                df["Destination Airport"]
-                  .str.split(pat="-", n=1, expand=False)
-                  .str[0]
-            )
-            df["Origin Lat"] = df["Origin_Code"].map(coords_map["DecLat"])
-            df["Origin Lon"] = df["Origin_Code"].map(coords_map["DecLon"])
-            df["Dest Lat"]   = df["Dest_Code"].map(coords_map["DecLat"])
-            df["Dest Lon"]   = df["Dest_Code"].map(coords_map["DecLon"])
+            # strip the "-INTL" suffix to match IATA_Code
+            df["Origin Code"] = df["Origin Airport"].str.split("-", 1).str[0]
+            df["Dest Code"]   = df["Destination Airport"].str.split("-", 1).str[0]
+            df["Origin Lat"]  = df["Origin Code"].map(coords_map["DecLat"])
+            df["Origin Lon"]  = df["Origin Code"].map(coords_map["DecLon"])
+            df["Dest Lat"]    = df["Dest Code"].map(coords_map["DecLat"])
+            df["Dest Lon"]    = df["Dest Code"].map(coords_map["DecLon"])
         else:
-            st.warning("❌ Coordinate file missing IATA_Code/DecLat/DecLon columns.")
+            st.warning("❌ Coordinate file missing IATA_Code/DecLat/DecLon.")
     except Exception as e:
         st.warning(f"❌ Failed to process coordinate file: {e}")
 
@@ -264,8 +256,8 @@ origin_summary = df.groupby("Origin Country Name", as_index=False).agg({
     "Passengers after policy": "sum",
 })
 origin_summary["Relative Change (%)"] = (
-    origin_summary["Passengers after policy"]
-    / origin_summary["Passengers"] - 1
+    origin_summary["Passengers after policy"] /
+    origin_summary["Passengers"] - 1
 ) * 100
 
 fig = px.bar(
@@ -283,7 +275,7 @@ st.plotly_chart(fig, use_container_width=True)
 col1, col2 = st.columns(2)
 with col1:
     total_base = df["Passengers"].sum()
-    total_new = df["Passengers after policy"].sum()
+    total_new  = df["Passengers after policy"].sum()
     st.metric(
         "Total Passengers (M)",
         f"{total_new/1e6:,.2f}",
@@ -298,17 +290,22 @@ with col2:
 st.info("💡 Each country inherits the global GDP growth unless adjusted manually.")
 st.caption("Data: Sabre MI (or dummy) · Visualization by Streamlit & Plotly")
 
-# Kepler map (if coords are loaded successfully)
-coords_required = {"Origin Lat", "Origin Lon", "Dest Lat", "Dest Lon"}
-if coords_required.issubset(df.columns) and not df[list(coords_required)].isnull().any().any():
+# ----------------------
+# Kepler map
+# ----------------------
+coords_required = ["Origin Lat", "Origin Lon", "Dest Lat", "Dest Lon"]
+# build kepler_df first
+kepler_df = df.dropna(subset=coords_required).copy()
+if not kepler_df.empty:
     st.subheader("🌍 Air Traffic Change Map")
-    kepler_df = df.dropna(subset=list(coords_required)).copy()
     kepler_df["origin_lat"] = kepler_df["Origin Lat"]
     kepler_df["origin_lng"] = kepler_df["Origin Lon"]
-    kepler_df["dest_lat"] = kepler_df["Dest Lat"]
-    kepler_df["dest_lng"] = kepler_df["Dest Lon"]
+    kepler_df["dest_lat"]   = kepler_df["Dest Lat"]
+    kepler_df["dest_lng"]   = kepler_df["Dest Lon"]
     kepler_df["traffic_change"] = kepler_df["Passenger Δ (%)"]
-
     m = KeplerGl(height=600)
     m.add_data(data=kepler_df, name="Air Traffic Change")
     keplergl_static(m)
+else:
+    if coord_file:
+        st.warning("❌ No matching airport coords found – map not rendered.")
