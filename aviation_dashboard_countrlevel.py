@@ -249,4 +249,4 @@ with col1:
     st.metric("Total Passengers (M)", f"{new / 1e6:.2f}", f"{(new / base - 1)*100:+.1f}%")
 
 with col2:
-    st.metric("Avg. Carbon Cost (€)", f"{df['C]()
+    st.metric("Avg. Carbon Cost (€)", f"{df['Carbon cost per pax'].mean():.2f}")
