@@ -305,133 +305,136 @@ st.caption("Data: Sabre MI (or dummy) · Visualization by Streamlit & Plotly")
 
 
 
-
 # ─────── Kepler map (replace your old map section with this) ───────
 
 from keplergl import KeplerGl
-import pandas as pd  # make sure pandas is imported
 import streamlit.components.v1 as components
 
-# 1) build country centroids
-coords_orig = (
-    df[['Origin Country Name', 'Origin Lat', 'Origin Lon']]
-    .rename(columns={
-        'Origin Country Name': 'Country',
-        'Origin Lat': 'Lat',
-        'Origin Lon': 'Lon'
-    })
-)
-coords_dest = (
-    df[['Destination Country Name', 'Dest Lat', 'Dest Lon']]
-    .rename(columns={
-        'Destination Country Name': 'Country',
-        'Dest Lat': 'Lat',
-        'Dest Lon': 'Lon'
-    })
-)
-coords = pd.concat([coords_orig, coords_dest], ignore_index=True)
-
-centroids = (
-    coords
-    .dropna(subset=['Lat', 'Lon'])
-    .groupby('Country', as_index=False)[['Lat', 'Lon']]
-    .mean()
-)
-
-# 2) aggregate inbound+outbound per unordered pair
-pair_agg = (
-    df.groupby(
-        [
-            df['Origin Country Name'].where(
-                df['Origin Country Name'] < df['Destination Country Name'],
-                df['Destination Country Name']
-            ).rename('A'),
-            df['Destination Country Name'].where(
-                df['Origin Country Name'] < df['Destination Country Name'],
-                df['Origin Country Name']
-            ).rename('B')
-        ],
-        as_index=False
+# Only run the map if all four centroid columns exist
+required_centroid_cols = ["Origin Lat", "Origin Lon", "Dest Lat", "Dest Lon"]
+if all(col in df.columns for col in required_centroid_cols):
+    # 1) build country centroids
+    coords_orig = (
+        df[["Origin Country Name", "Origin Lat", "Origin Lon"]]
+        .rename(columns={
+            "Origin Country Name": "Country",
+            "Origin Lat": "Lat",
+            "Origin Lon": "Lon",
+        })
     )
-    .agg({
-        'Passengers': 'sum',
-        'Passengers after policy': 'sum'
-    })
-)
-pair_agg['Traffic Δ (%)'] = (
-    pair_agg['Passengers after policy'] / pair_agg['Passengers'] - 1
-) * 100
-
-# 3) merge centroids onto A & B
-pair_agg = (
-    pair_agg
-    .merge(
-        centroids.rename(columns={'Country': 'A', 'Lat': 'A Lat', 'Lon': 'A Lon'}),
-        on='A', how='left'
+    coords_dest = (
+        df[["Destination Country Name", "Dest Lat", "Dest Lon"]]
+        .rename(columns={
+            "Destination Country Name": "Country",
+            "Dest Lat": "Lat",
+            "Dest Lon": "Lon",
+        })
     )
-    .merge(
-        centroids.rename(columns={'Country': 'B', 'Lat': 'B Lat', 'Lon': 'B Lon'}),
-        on='B', how='left'
+    centroids = (
+        pd.concat([coords_orig, coords_dest], ignore_index=True)
+          .dropna(subset=["Lat", "Lon"])
+          .groupby("Country", as_index=False)[["Lat", "Lon"]]
+          .mean()
     )
-)
 
-# 4) build Kepler config with an arc layer
-kepler_config = {
-    "version": "v1",
-    "config": {
-        "visState": {
-            "filters": [],
-            "layers": [{
-                "id": "arc_layer",
-                "type": "arc",
-                "config": {
-                    "dataId": "pairs",
-                    "label": "Traffic Δ (%)",
-                    "columns": {
-                        "lat0": "A Lat",
-                        "lng0": "A Lon",
-                        "lat1": "B Lat",
-                        "lng1": "B Lon"
-                    },
-                    "isVisible": True,
-                    "visConfig": {
-                        "thickness": 3,
-                        "opacity": 0.8,
-                        "colorRange": {
-                            "name": "Global Warming",
-                            "type": "sequential",
-                            "category": "Uber",
-                            "colors": ["#ffffcc", "#a1dab4", "#41b6c4", "#2c7fb8", "#253494"]
+    # 2) aggregate inbound+outbound per unordered country-pair
+    ab = df[["Origin Country Name", "Destination Country Name",
+             "Passengers", "Passengers after policy"]].copy()
+    # force A < B lexicographically
+    ab["A"] = np.where(
+        ab["Origin Country Name"] < ab["Destination Country Name"],
+        ab["Origin Country Name"],
+        ab["Destination Country Name"]
+    )
+    ab["B"] = np.where(
+        ab["Origin Country Name"] < ab["Destination Country Name"],
+        ab["Destination Country Name"],
+        ab["Origin Country Name"]
+    )
+    pair_agg = (
+        ab.groupby(["A", "B"], as_index=False)
+          .agg({"Passengers": "sum", "Passengers after policy": "sum"})
+    )
+    pair_agg["Traffic Δ (%)"] = (
+        pair_agg["Passengers after policy"] / pair_agg["Passengers"] - 1
+    ) * 100
+
+    # 3) merge centroids onto A & B using left_on/right_on
+    pair_agg = (
+        pair_agg
+          # merge A → centroids
+          .merge(centroids,
+                 left_on="A", right_on="Country",
+                 how="left")
+          .rename(columns={"Lat": "A Lat", "Lon": "A Lon"})
+          .drop(columns=["Country"])
+          # merge B → centroids
+          .merge(centroids,
+                 left_on="B", right_on="Country",
+                 how="left")
+          .rename(columns={"Lat": "B Lat", "Lon": "B Lon"})
+          .drop(columns=["Country"])
+    )
+
+    # 4) build Kepler config with an arc layer
+    kepler_config = {
+        "version": "v1",
+        "config": {
+            "visState": {
+                "filters": [],
+                "layers": [{
+                    "id": "arc_layer",
+                    "type": "arc",
+                    "config": {
+                        "dataId": "pairs",
+                        "label": "Traffic Δ (%)",
+                        "columns": {
+                            "lat0": "A Lat",
+                            "lng0": "A Lon",
+                            "lat1": "B Lat",
+                            "lng1": "B Lon"
                         },
-                        "sizeField": "Traffic Δ (%)",
-                        "sizeScale": 10
+                        "isVisible": True,
+                        "visConfig": {
+                            "thickness": 3,
+                            "opacity": 0.8,
+                            "colorRange": {
+                                "name": "Global Warming",
+                                "type": "sequential",
+                                "category": "Uber",
+                                "colors": ["#ffffcc", "#a1dab4", "#41b6c4", "#2c7fb8", "#253494"]
+                            },
+                            "sizeField": "Traffic Δ (%)",
+                            "sizeScale": 10
+                        }
+                    }
+                }],
+                "interactionConfig": {
+                    "tooltip": {
+                        "fieldsToShow": {
+                            "pairs": ["A", "B", "Traffic Δ (%)"]
+                        },
+                        "enabled": True
                     }
                 }
-            }],
-            "interactionConfig": {
-                "tooltip": {
-                    "fieldsToShow": {
-                        "pairs": ["A", "B", "Traffic Δ (%)"]
-                    },
-                    "enabled": True
-                }
-            }
-        },
-        "mapState": {
-            "latitude": centroids['Lat'].mean(),
-            "longitude": centroids['Lon'].mean(),
-            "zoom": 2.2,
-            "pitch": 30
-        },
-        "mapStyle": {}
+            },
+            "mapState": {
+                "latitude": centroids["Lat"].mean(),
+                "longitude": centroids["Lon"].mean(),
+                "zoom": 2.2,
+                "pitch": 30
+            },
+            "mapStyle": {}
+        }
     }
-}
 
-# 5) render
-kepler_map = KeplerGl(
-    height=800,
-    data={"pairs": pair_agg},
-    config=kepler_config
-)
+    # 5) render the map (allowing vertical expansion)
+    kepler_map = KeplerGl(
+        height=800,
+        data={"pairs": pair_agg},
+        config=kepler_config
+    )
+    components.html(kepler_map._repr_html_(), height=820, scrolling=True)
 
-components.html(kepler_map._repr_html_(), height=820, scrolling=True)
+else:
+    st.warning("Upload a coordinate file with 'Origin Lat', 'Origin Lon', 'Dest Lat' and 'Dest Lon' to see the Kepler map.")
