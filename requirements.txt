@@ -5,3 +5,4 @@ plotly>=5.20
 numpy
 keplergl
 streamlit-keplergl
+openpyxl
