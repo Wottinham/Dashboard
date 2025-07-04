@@ -100,9 +100,9 @@ else:
     carbon_dest_countries = []
 
 # ----------------------
-# Parameters
+# Tax
 # ----------------------
-st.sidebar.markdown("### Parameters")
+st.sidebar.markdown("### Passenger Tax")
 
 # Air Passenger Tax Policy
 tax_policy = st.sidebar.selectbox(
@@ -129,6 +129,8 @@ else:
     air_passenger_tax = 0.0
     tax_origin_countries = []
     tax_dest_countries = []
+
+st.sidebar.markdown("### Parameters")
 
 # Cost pass-through to fares (applies to both CO₂ price & tax)
 pass_through = st.sidebar.slider(
