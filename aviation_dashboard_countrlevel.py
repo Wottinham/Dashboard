@@ -43,8 +43,12 @@ st.markdown("Simulate air travel between airports and policy impacts.")
 
 # Sidebar uploads
 st.sidebar.header("📈 Policy & Data Inputs")
-uploaded_file = st.sidebar.file_uploader("Upload airport-pair passenger CSV", type=["csv"], key="upload_csv")
-coord_file   = st.sidebar.file_uploader("Upload airport coordinates (.xlsx)", type=["xlsx"], key="upload_coords")
+uploaded_file = st.sidebar.file_uploader(
+    "Upload airport-pair passenger CSV", type=["csv"], key="upload_csv"
+)
+coord_file = st.sidebar.file_uploader(
+    "Upload airport coordinates (.xlsx)", type=["xlsx"], key="upload_coords"
+)
 
 # ----------------------
 # Load passenger data
@@ -56,7 +60,7 @@ else:
     df = load_dummy_data()
     st.info("🛈 No file uploaded – using **dummy data**.")
 
-# Validate
+# Validate required columns
 required_cols = {
     "Origin Country Name", "Destination Country Name",
     "Origin Airport", "Destination Airport",
@@ -68,7 +72,7 @@ if not required_cols.issubset(df.columns):
 df = df.dropna(subset=required_cols).reset_index(drop=True)
 
 origin_all = sorted(df["Origin Country Name"].unique())
-dest_all   = sorted(df["Destination Country Name"].unique())
+dest_all = sorted(df["Destination Country Name"].unique())
 
 # ----------------------
 # Carbon pricing policy
@@ -162,10 +166,8 @@ with st.sidebar.expander("Customize GDP Growth for Specific Origins"):
 # ----------------------
 # Policy calculations
 # ----------------------
-# Emissions
 df["CO2 per pax (kg)"] = df["Distance (km)"] * emission_factor
 
-# Carbon cost
 df["Carbon cost per pax"] = 0.0
 if enable_carbon:
     mask_c = (
@@ -177,7 +179,6 @@ if enable_carbon:
         * ets_price * pass_through
     )
 
-# Passenger tax
 df["Air passenger tax per pax"] = 0.0
 if enable_tax:
     mask_t = (
@@ -186,7 +187,6 @@ if enable_tax:
     )
     df.loc[mask_t, "Air passenger tax per pax"] = air_passenger_tax * pass_through
 
-# New fare & fare change
 df["New Avg Fare"] = (
     df["Avg. Total Fare(USD)"]
     + df["Carbon cost per pax"]
@@ -196,7 +196,6 @@ df["Fare Δ (%)"] = (
     df["New Avg Fare"] / df["Avg. Total Fare(USD)"] - 1
 ) * 100
 
-# Elasticity & GDP
 fare_factor = (
     (df["New Avg Fare"] / df["Avg. Total Fare(USD)"])
     .replace([np.inf, -np.inf], np.nan) ** user_price_elasticity
@@ -216,16 +215,25 @@ df["Passenger Δ (%)"] = (
 ) * 100
 
 # ----------------------
-# Optional: load & join coords
+# Optional: load & join coordinates
 # ----------------------
 if coord_file:
     try:
         coords_df = pd.read_excel(coord_file, engine="openpyxl")
+        # only keep first row per IATA_Code
+        coords_df = coords_df.drop_duplicates(subset=["IATA_Code"])
         if {"IATA_Code", "DecLat", "DecLon"}.issubset(coords_df.columns):
             coords_map = coords_df.set_index("IATA_Code")[["DecLat", "DecLon"]]
-            # --- FIX: explicitly name pat, n, expand ---
-            df["Origin_Code"] = df["Origin Airport"].str.split(pat="-", n=1, expand=False).str[0]
-            df["Dest_Code"]   = df["Destination Airport"].str.split(pat="-", n=1, expand=False).str[0]
+            df["Origin_Code"] = (
+                df["Origin Airport"]
+                  .str.split(pat="-", n=1, expand=False)
+                  .str[0]
+            )
+            df["Dest_Code"] = (
+                df["Destination Airport"]
+                  .str.split(pat="-", n=1, expand=False)
+                  .str[0]
+            )
             df["Origin Lat"] = df["Origin_Code"].map(coords_map["DecLat"])
             df["Origin Lon"] = df["Origin_Code"].map(coords_map["DecLon"])
             df["Dest Lat"]   = df["Dest_Code"].map(coords_map["DecLat"])
@@ -275,7 +283,7 @@ st.plotly_chart(fig, use_container_width=True)
 col1, col2 = st.columns(2)
 with col1:
     total_base = df["Passengers"].sum()
-    total_new  = df["Passengers after policy"].sum()
+    total_new = df["Passengers after policy"].sum()
     st.metric(
         "Total Passengers (M)",
         f"{total_new/1e6:,.2f}",
@@ -290,15 +298,15 @@ with col2:
 st.info("💡 Each country inherits the global GDP growth unless adjusted manually.")
 st.caption("Data: Sabre MI (or dummy) · Visualization by Streamlit & Plotly")
 
-# Kepler map (only if coords are present)
+# Kepler map (if coords are loaded successfully)
 coords_required = {"Origin Lat", "Origin Lon", "Dest Lat", "Dest Lon"}
-if coords_required.issubset(df.columns):
+if coords_required.issubset(df.columns) and not df[list(coords_required)].isnull().any().any():
     st.subheader("🌍 Air Traffic Change Map")
     kepler_df = df.dropna(subset=list(coords_required)).copy()
-    kepler_df["origin_lat"]    = kepler_df["Origin Lat"]
-    kepler_df["origin_lng"]    = kepler_df["Origin Lon"]
-    kepler_df["dest_lat"]      = kepler_df["Dest Lat"]
-    kepler_df["dest_lng"]      = kepler_df["Dest Lon"]
+    kepler_df["origin_lat"] = kepler_df["Origin Lat"]
+    kepler_df["origin_lng"] = kepler_df["Origin Lon"]
+    kepler_df["dest_lat"] = kepler_df["Dest Lat"]
+    kepler_df["dest_lng"] = kepler_df["Dest Lon"]
     kepler_df["traffic_change"] = kepler_df["Passenger Δ (%)"]
 
     m = KeplerGl(height=600)
