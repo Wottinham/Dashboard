@@ -301,40 +301,69 @@ st.info("💡 Each country inherits the global GDP growth unless adjusted manual
 st.caption("Data: Sabre MI (or dummy) · Visualization by Streamlit & Plotly")
 
 # ----------------------
-# Kepler map with lines
+# Kepler map: country-level arcs
 # ----------------------
+# we need the four coord columns
 coords_required = ["Origin Lat", "Origin Lon", "Dest Lat", "Dest Lon"]
-kepler_df = df.dropna(subset=coords_required).copy()
+# compute per‐country centroids
+origin_centroids = (
+    df.groupby("Origin Country Name")[["Origin Lat", "Origin Lon"]]
+      .mean()
+      .reset_index()
+)
+dest_centroids = (
+    df.groupby("Destination Country Name")[["Dest Lat", "Dest Lon"]]
+      .mean()
+      .reset_index()
+)
+
+# aggregate passenger flows at country level
+country_agg = (
+    df.groupby(["Origin Country Name", "Destination Country Name"], as_index=False)
+      .agg({
+          "Passengers": "sum",
+          "Passengers after policy": "sum"
+      })
+)
+country_agg["traffic_change"] = (
+    country_agg["Passengers after policy"] / country_agg["Passengers"] - 1
+) * 100
+
+# merge in the centroids
+country_agg = (
+    country_agg
+    .merge(origin_centroids, on="Origin Country Name", how="left")
+    .merge(dest_centroids,   on="Destination Country Name", how="left")
+)
+
+# drop any pairs without coords
+kepler_df = country_agg.dropna(subset=coords_required).copy()
 
 if not kepler_df.empty:
-    st.subheader("🌍 Air Traffic Change Map")
+    st.subheader("🌍 Air Traffic Change Map (Country Level)")
 
-    # rename for kepler
-    kepler_df = kepler_df.rename(
-        columns={
-            "Origin Lat": "origin_lat",
-            "Origin Lon": "origin_lng",
-            "Dest Lat":   "dest_lat",
-            "Dest Lon":   "dest_lng",
-            "Origin Airport":      "origin_airport",
-            "Destination Airport": "dest_airport",
-            "Passenger Δ (%)":     "traffic_change",
-        }
-    )
+    # rename for Kepler
+    kepler_df = kepler_df.rename(columns={
+        "Origin Lat": "origin_lat",
+        "Origin Lon": "origin_lng",
+        "Dest Lat":   "dest_lat",
+        "Dest Lon":   "dest_lng",
+        "Origin Country Name":      "origin_country",
+        "Destination Country Name": "dest_country",
+    })
 
-    # Kepler config: one 'line' layer
+    # configuration: arc layer between country centroids
     kepler_config = {
         "version": "v1",
         "config": {
             "visState": {
                 "layers": [
                     {
-                        "id": "air-traffic-lines",
-                        "type": "line",
+                        "id": "country-traffic-arcs",
+                        "type": "arc",
                         "config": {
-                            "dataId": "Air Traffic Change",
-                            "label": "Traffic Δ Lines",
-                            "color": [255, 153, 31],
+                            "dataId": "Country Traffic Change",
+                            "label": "Traffic Δ Arcs",
                             "columns": {
                                 "lat0": "origin_lat",
                                 "lng0": "origin_lng",
@@ -344,8 +373,11 @@ if not kepler_df.empty:
                             "isVisible": True,
                             "visConfig": {
                                 "opacity": 0.8,
-                                "thickness": 4,
-                                "colorField": {"name": "traffic_change", "type": "real"},
+                                "thickness": 3,
+                                "colorField": {
+                                    "name": "traffic_change",
+                                    "type": "real"
+                                },
                                 "colorScale": "quantile"
                             }
                         }
@@ -354,10 +386,10 @@ if not kepler_df.empty:
                 "interactionConfig": {
                     "tooltip": {
                         "fieldsToShow": {
-                            "Air Traffic Change": [
-                                {"name": "origin_airport", "fieldIdx": 0},
-                                {"name": "dest_airport",   "fieldIdx": 1},
-                                {"name": "traffic_change", "fieldIdx": 2}
+                            "Country Traffic Change": [
+                                {"name": "origin_country"},
+                                {"name": "dest_country"},
+                                {"name": "traffic_change"}
                             ]
                         }
                     }
@@ -368,8 +400,8 @@ if not kepler_df.empty:
     }
 
     m = KeplerGl(config=kepler_config, height=600)
-    m.add_data(data=kepler_df, name="Air Traffic Change")
+    m.add_data(data=kepler_df, name="Country Traffic Change")
     keplergl_static(m)
 
 elif coord_file:
-    st.warning("❌ No matching airport coords found – map not rendered.")
+    st.warning("❌ No matching country centroids – map not rendered.")
