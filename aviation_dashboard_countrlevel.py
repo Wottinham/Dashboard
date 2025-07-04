@@ -217,13 +217,18 @@ df["Passenger Δ (%)"] = (
 # ----------------------
 # OPTIONAL: load & join coordinates
 # ----------------------
+# **Initialize these columns** so dropna won't KeyError
+df["Origin Lat"] = np.nan
+df["Origin Lon"] = np.nan
+df["Dest Lat"]   = np.nan
+df["Dest Lon"]   = np.nan
+
 if coord_file:
     try:
         coords_df = pd.read_excel(coord_file, engine="openpyxl")
         coords_df = coords_df.drop_duplicates(subset=["IATA_Code"])
         if {"IATA_Code", "DecLat", "DecLon"}.issubset(coords_df.columns):
             coords_map = coords_df.set_index("IATA_Code")[["DecLat", "DecLon"]]
-            # strip the "-INTL" suffix to match IATA_Code
             df["Origin Code"] = df["Origin Airport"].str.split("-", 1).str[0]
             df["Dest Code"]   = df["Destination Airport"].str.split("-", 1).str[0]
             df["Origin Lat"]  = df["Origin Code"].map(coords_map["DecLat"])
@@ -294,15 +299,15 @@ st.caption("Data: Sabre MI (or dummy) · Visualization by Streamlit & Plotly")
 # Kepler map
 # ----------------------
 coords_required = ["Origin Lat", "Origin Lon", "Dest Lat", "Dest Lon"]
-# build kepler_df first
 kepler_df = df.dropna(subset=coords_required).copy()
+
 if not kepler_df.empty:
     st.subheader("🌍 Air Traffic Change Map")
-    kepler_df["origin_lat"] = kepler_df["Origin Lat"]
-    kepler_df["origin_lng"] = kepler_df["Origin Lon"]
-    kepler_df["dest_lat"]   = kepler_df["Dest Lat"]
-    kepler_df["dest_lng"]   = kepler_df["Dest Lon"]
-    kepler_df["traffic_change"] = kepler_df["Passenger Δ (%)"]
+    kepler_df["origin_lat"]      = kepler_df["Origin Lat"]
+    kepler_df["origin_lng"]      = kepler_df["Origin Lon"]
+    kepler_df["dest_lat"]        = kepler_df["Dest Lat"]
+    kepler_df["dest_lng"]        = kepler_df["Dest Lon"]
+    kepler_df["traffic_change"]  = kepler_df["Passenger Δ (%)"]
     m = KeplerGl(height=600)
     m.add_data(data=kepler_df, name="Air Traffic Change")
     keplergl_static(m)
