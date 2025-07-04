@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+from keplergl import KeplerGl
+import streamlit.components.v1 as components
 
 # ----------------------
 # Model configuration
@@ -96,10 +98,10 @@ ets_price = st.sidebar.slider(
 st.sidebar.markdown("### Apply CO₂ Price to Selected Countries")
 
 origin_all = sorted(df["Origin Country Name"].unique())
-dest_all = sorted(df["Destination Country Name"].unique())
+dest_all   = sorted(df["Destination Country Name"].unique())
 
 apply_all_origin = st.sidebar.checkbox("Select all Origin Countries", value=True)
-apply_all_dest = st.sidebar.checkbox("Select all Destination Countries", value=True)
+apply_all_dest   = st.sidebar.checkbox("Select all Destination Countries", value=True)
 
 selected_origin_countries = st.sidebar.multiselect(
     "Countries as ORIGIN where CO₂ price applies:",
@@ -156,7 +158,7 @@ with st.sidebar.expander("Customize GDP Growth for Specific Countries"):
         )
 
 # ----------------------
-# Carbon cost per passenger (applies if either origin OR destination matches)
+# Carbon cost per passenger (applies if both origin AND destination match)
 # ----------------------
 df["CO2 per pax (kg)"] = df["Distance (km)"] * EMISSION_FACTOR
 df["Carbon cost per pax"] = 0.0
@@ -227,9 +229,9 @@ st.plotly_chart(fig, use_container_width=True)
 
 col1, col2 = st.columns(2)
 with col1:
-    total_passengers_2019 = df["Passengers"].sum()
+    total_passengers_2019   = df["Passengers"].sum()
     total_passengers_policy = df["Passengers after policy"].sum()
-    passenger_delta = (total_passengers_policy / total_passengers_2019 - 1) * 100
+    passenger_delta         = (total_passengers_policy / total_passengers_2019 - 1) * 100
     st.metric(
         "Total Passengers (m)",
         f"{total_passengers_policy / 1e6:,.2f} M",
@@ -239,8 +241,29 @@ with col2:
     avg_carbon_cost = df["Carbon cost per pax"].mean()
     st.metric("Avg Carbon Cost per Ticket", f"€{avg_carbon_cost:.2f}")
 
+# ----------------------
+# Kepler.gl Map of Traffic Flows
+# ----------------------
+st.subheader("🗺️ Traffic Flows Map")
+
+# Prepare a minimal flows dataset
+flows = df[[
+    "Origin Country Name", "Destination Country Name", "Passengers"
+]].rename(columns={
+    "Origin Country Name": "origin_country",
+    "Destination Country Name": "destination_country"
+})
+
+# Instantiate Kepler map and add flows data
+kepler_map = KeplerGl(height=500)
+kepler_map.add_data(data=flows, name="country_flows")
+
+# Render and embed
+html = kepler_map._repr_html_()
+components.html(html, height=550)
+
 st.info(
     "💡 Each country inherits the global GDP growth unless adjusted manually in the sidebar dropdown."
 )
 
-st.caption("Data: Sabre MI (or dummy) · Visualization powered by Streamlit & Plotly")
+st.caption("Data: Sabre MI (or dummy) · Visualization powered by Streamlit, Plotly & Kepler.gl")
