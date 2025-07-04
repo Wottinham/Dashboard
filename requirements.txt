@@ -1,4 +1,4 @@
-pyarrow==12.0.1
+pyarrow
 streamlit>=1.35
 pandas
 plotly>=5.20
