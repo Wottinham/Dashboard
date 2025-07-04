@@ -209,6 +209,36 @@ with col2:
     avg_cc = df["Carbon cost per pax"].mean()
     st.metric("Avg Carbon Cost per Ticket", f"€{avg_cc:.2f}")
 
+
+# ----------------------
+# Optional: Upload coordinates for airports
+# ----------------------
+st.sidebar.markdown("### Optional: Upload Airport Coordinates")
+coord_file = st.sidebar.file_uploader("Upload airport coordinates (xlsx)", type=["xlsx"])
+
+iata_coords = None
+if coord_file is not None:
+    try:
+        coords_df = pd.read_excel(coord_file)
+        if {'IATA_Code', 'DecLat', 'DecLon'}.issubset(coords_df.columns):
+            iata_coords = coords_df.set_index('IATA_Code')[['DecLat', 'DecLon']]
+            st.success("✅ Airport coordinates loaded.")
+
+            # Match for Origin
+            df = df.merge(iata_coords, how='left', left_on='Origin Airport', right_index=True)
+            df.rename(columns={'DecLat': 'Origin Lat', 'DecLon': 'Origin Lon'}, inplace=True)
+
+            # Match for Destination
+            df = df.merge(iata_coords, how='left', left_on='Destination Airport', right_index=True)
+            df.rename(columns={'DecLat': 'Destination Lat', 'DecLon': 'Destination Lon'}, inplace=True)
+
+            # Drop rows with missing coordinates
+            df.dropna(subset=['Origin Lat', 'Origin Lon', 'Destination Lat', 'Destination Lon'], inplace=True)
+        else:
+            st.error("❌ The coordinate file must contain: IATA_Code, DecLat, DecLon.")
+    except Exception as e:
+        st.error(f"❌ Failed to process coordinate file: {e}")
+        
 # ----------------------
 # Kepler Map
 # ----------------------
