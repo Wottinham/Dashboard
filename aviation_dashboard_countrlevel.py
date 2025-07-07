@@ -336,7 +336,7 @@ fig_density = px.histogram(
     df_density,
     x="Distance_km",
     color="Scenario",
-    weights="Passengers",
+    weight="Passengers",
     histnorm="density",
     barmode="overlay",
     nbins=50,
