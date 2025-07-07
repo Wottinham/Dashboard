@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 from keplergl import KeplerGl
-import streamlit.components.v1 as components
+from streamlit_keplergl import keplergl_static
 
 # ----------------------
 # Model configuration (defaults)
@@ -302,6 +302,7 @@ st.caption("Data: Sabre MI (or dummy) · Visualization by Streamlit & Plotly")
 origin_price_summary = df.groupby("Origin Country Name", as_index=False).agg({
     "Fare Δ (%)": "mean"
 }).rename(columns={"Fare Δ (%)": "Avg Fare Δ (%)"})
+
 fig_price = px.bar(
     origin_price_summary,
     x="Origin Country Name",
@@ -350,7 +351,7 @@ fig_density = px.line(
 fig_density.update_traces(line_shape="spline")
 st.plotly_chart(fig_density, use_container_width=True)
 
-# ─────── Kepler country‐level arcs (double height, full width) ───────
+# ─────── Kepler country‐level arcs ───────
 required_centroid_cols = ["Origin Lat", "Origin Lon", "Dest Lat", "Dest Lon"]
 if all(col in df.columns for col in required_centroid_cols):
     # 1) centroids
@@ -434,16 +435,13 @@ if all(col in df.columns for col in required_centroid_cols):
       }
     }
 
-    # 5) render the map wrapped in a full‐width div
+    # 5) render via keplergl_static at 1,600px high
     kepler_map = KeplerGl(
       height=1600,
       data={"pairs":pair_agg},
       config=kepler_config
     )
-    html = kepler_map._repr_html_()
-    # wrap it in a 100%‐wide, fixed‐height container
-    wrapped = f'<div style="width:100%; height:1600px; overflow:hidden;">{html}</div>'
-    components.html(wrapped, height=1620, scrolling=True)
+    keplergl_static(kepler_map, height=1600)
 
 else:
     st.warning(
