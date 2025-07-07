@@ -314,7 +314,6 @@ fig_price.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
 st.plotly_chart(fig_price, use_container_width=True)
 
 # 3) Smoothed density curves of passenger distances
-# — build Before/After sub‐DataFrames —
 df_before = df[["Distance (km)", "Passengers"]].rename(
     columns={"Distance (km)": "Distance_km", "Passengers": "Count"}
 )
@@ -322,12 +321,11 @@ df_after = df[["Distance (km)", "Passengers after policy"]].rename(
     columns={"Distance (km)": "Distance_km", "Passengers after policy": "Count"}
 )
 
-# — compute a common bin range —
+# compute a common bin range
 min_d = min(df_before["Distance_km"].min(), df_after["Distance_km"].min())
 max_d = max(df_before["Distance_km"].max(), df_after["Distance_km"].max())
 bins  = np.linspace(min_d, max_d, 50)
 
-# — histogram + density for each —
 dens_list = []
 for label, subset in [("Before", df_before), ("After", df_after)]:
     x = subset["Distance_km"].dropna().to_numpy()
@@ -352,7 +350,7 @@ fig_density = px.line(
 fig_density.update_traces(line_shape="spline")
 st.plotly_chart(fig_density, use_container_width=True)
 
-# ─────── Kepler country‐level arcs (double height) ───────
+# ─────── Kepler country‐level arcs (double height, full width) ───────
 required_centroid_cols = ["Origin Lat", "Origin Lon", "Dest Lat", "Dest Lon"]
 if all(col in df.columns for col in required_centroid_cols):
     # 1) centroids
@@ -436,13 +434,16 @@ if all(col in df.columns for col in required_centroid_cols):
       }
     }
 
-    # 5) render (double height)
+    # 5) render the map wrapped in a full‐width div
     kepler_map = KeplerGl(
       height=1600,
       data={"pairs":pair_agg},
       config=kepler_config
     )
-    components.html(kepler_map._repr_html_(), height=1620, scrolling=True)
+    html = kepler_map._repr_html_()
+    # wrap it in a 100%‐wide, fixed‐height container
+    wrapped = f'<div style="width:100%; height:1600px; overflow:hidden;">{html}</div>'
+    components.html(wrapped, height=1620, scrolling=True)
 
 else:
     st.warning(
