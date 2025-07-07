@@ -265,7 +265,8 @@ origin_summary = df.groupby("Origin Country Name", as_index=False).agg({
     "Passengers after policy":  "sum"
 })
 origin_summary["Relative Change (%)"] = (
-    origin_summary["Passengers after policy"] / origin_summary["Passengers"] - 1
+    origin_summary["Passengers after policy"] /
+    origin_summary["Passengers"] - 1
 ) * 100
 
 fig = px.bar(
@@ -313,6 +314,7 @@ fig_price.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
 st.plotly_chart(fig_price, use_container_width=True)
 
 # 3) Smoothed density curves of passenger distances
+# — build Before/After sub‐DataFrames —
 df_before = df[["Distance (km)", "Passengers"]].rename(
     columns={"Distance (km)": "Distance_km", "Passengers": "Count"}
 )
@@ -320,18 +322,18 @@ df_after = df[["Distance (km)", "Passengers after policy"]].rename(
     columns={"Distance (km)": "Distance_km", "Passengers after policy": "Count"}
 )
 
-# build histograms for each scenario
+# — compute a common bin range —
 min_d = min(df_before["Distance_km"].min(), df_after["Distance_km"].min())
 max_d = max(df_before["Distance_km"].max(), df_after["Distance_km"].max())
-bins = np.linspace(min_d, max_d, 50)
+bins  = np.linspace(min_d, max_d, 50)
 
+# — histogram + density for each —
 dens_list = []
 for label, subset in [("Before", df_before), ("After", df_after)]:
-    hist, edges = np.histogram(
-        subset["Distance_km"], bins=bins,
-        weights=subset["Count"], density=True
-    )
-    centers = (edges[:-1] + edges[1:]) / 2
+    x = subset["Distance_km"].dropna().to_numpy()
+    w = subset["Count"].fillna(0).to_numpy()
+    hist, edges = np.histogram(x, bins=bins, weights=w, density=True)
+    centers = 0.5 * (edges[:-1] + edges[1:])
     dens_list.append(pd.DataFrame({
         "Distance (km)": centers,
         "Density": hist,
@@ -353,127 +355,97 @@ st.plotly_chart(fig_density, use_container_width=True)
 # ─────── Kepler country‐level arcs (double height) ───────
 required_centroid_cols = ["Origin Lat", "Origin Lon", "Dest Lat", "Dest Lon"]
 if all(col in df.columns for col in required_centroid_cols):
-    # 1) build country centroids
+    # 1) centroids
     coords_orig = df[["Origin Country Name", "Origin Lat", "Origin Lon"]].rename(
-        columns={
-            "Origin Country Name": "Country",
-            "Origin Lat": "Lat",
-            "Origin Lon": "Lon",
-        }
+        columns={"Origin Country Name":"Country","Origin Lat":"Lat","Origin Lon":"Lon"}
     )
-    coords_dest = df[["Destination Country Name", "Dest Lat", "Dest Lon"]].rename(
-        columns={
-            "Destination Country Name": "Country",
-            "Dest Lat": "Lat",
-            "Dest Lon": "Lon",
-        }
+    coords_dest = df[["Destination Country Name","Dest Lat","Dest Lon"]].rename(
+        columns={"Destination Country Name":"Country","Dest Lat":"Lat","Dest Lon":"Lon"}
     )
     centroids = (
-        pd.concat([coords_orig, coords_dest], ignore_index=True)
-          .dropna(subset=["Lat", "Lon"])
-          .groupby("Country", as_index=False)[["Lat", "Lon"]]
-          .mean()
+        pd.concat([coords_orig, coords_dest],ignore_index=True)
+          .dropna(subset=["Lat","Lon"])
+          .groupby("Country",as_index=False)[["Lat","Lon"]].mean()
     )
 
-    # 2) aggregate inbound+outbound per unordered country-pair
-    ab = df[[
-        "Origin Country Name", "Destination Country Name",
-        "Passengers", "Passengers after policy"
-    ]].copy()
+    # 2) unordered country‐pair aggregation
+    ab = df[["Origin Country Name","Destination Country Name",
+             "Passengers","Passengers after policy"]].copy()
     ab["A"] = np.where(
-        ab["Origin Country Name"] < ab["Destination Country Name"],
-        ab["Origin Country Name"],
-        ab["Destination Country Name"]
+        ab["Origin Country Name"]<ab["Destination Country Name"],
+        ab["Origin Country Name"], ab["Destination Country Name"]
     )
     ab["B"] = np.where(
-        ab["Origin Country Name"] < ab["Destination Country Name"],
-        ab["Destination Country Name"],
-        ab["Origin Country Name"]
+        ab["Origin Country Name"]<ab["Destination Country Name"],
+        ab["Destination Country Name"], ab["Origin Country Name"]
     )
     pair_agg = (
-        ab.groupby(["A", "B"], as_index=False)
-          .agg({"Passengers": "sum", "Passengers after policy": "sum"})
+        ab.groupby(["A","B"],as_index=False)
+          .agg({"Passengers":"sum","Passengers after policy":"sum"})
     )
     pair_agg["Traffic Δ (%)"] = (
-        pair_agg["Passengers after policy"] / pair_agg["Passengers"] - 1
-    ) * 100
+        pair_agg["Passengers after policy"]/pair_agg["Passengers"] - 1
+    )*100
 
-    # 3) merge centroids onto A & B
+    # 3) merge centroids
     pair_agg = (
         pair_agg
-          .merge(centroids, left_on="A", right_on="Country", how="left")
-          .rename(columns={"Lat": "A Lat", "Lon": "A Lon"})
+          .merge(centroids,left_on="A",right_on="Country",how="left")
+          .rename(columns={"Lat":"A Lat","Lon":"A Lon"})
           .drop(columns=["Country"])
-          .merge(centroids, left_on="B", right_on="Country", how="left")
-          .rename(columns={"Lat": "B Lat", "Lon": "B Lon"})
+          .merge(centroids,left_on="B",right_on="Country",how="left")
+          .rename(columns={"Lat":"B Lat","Lon":"B Lon"})
           .drop(columns=["Country"])
     )
 
-    # 4) Kepler config with an arc layer
+    # 4) Kepler config
     kepler_config = {
-        "version": "v1",
-        "config": {
-            "visState": {
-                "filters": [],
-                "layers": [{
-                    "id": "arc_layer",
-                    "type": "arc",
-                    "config": {
-                        "dataId": "pairs",
-                        "label": "Traffic Δ (%)",
-                        "columns": {
-                            "lat0": "A Lat",
-                            "lng0": "A Lon",
-                            "lat1": "B Lat",
-                            "lng1": "B Lon"
-                        },
-                        "isVisible": True,
-                        "visConfig": {
-                            "thickness": 3,
-                            "opacity": 0.8,
-                            "colorField": {"name": "Traffic Δ (%)", "type": "real"},
-                            "colorScale": "quantile",
-                            "colorRange": {
-                                "name": "Global Warming",
-                                "type": "sequential",
-                                "category": "Uber",
-                                "colors": [
-                                    "#ffffcc", "#a1dab4",
-                                    "#41b6c4", "#2c7fb8", "#253494"
-                                ]
-                            },
-                            "sizeField": "Traffic Δ (%)",
-                            "sizeScale": 10
-                        }
-                    }
-                }],
-                "interactionConfig": {
-                    "tooltip": {
-                        "fieldsToShow": {"pairs": ["A", "B", "Traffic Δ (%)"]},
-                        "enabled": True
-                    }
-                }
-            },
-            "mapState": {
-                "latitude": centroids["Lat"].mean(),
-                "longitude": centroids["Lon"].mean(),
-                "zoom": 2.2,
-                "pitch": 30
-            },
-            "mapStyle": {}
-        }
+      "version":"v1","config":{
+        "visState":{
+          "filters":[],
+          "layers":[{
+            "id":"arc_layer","type":"arc","config":{
+              "dataId":"pairs","label":"Traffic Δ (%)",
+              "columns":{"lat0":"A Lat","lng0":"A Lon","lat1":"B Lat","lng1":"B Lon"},
+              "isVisible":True,
+              "visConfig":{
+                "thickness":3,"opacity":0.8,
+                "colorField":{"name":"Traffic Δ (%)","type":"real"},
+                "colorScale":"quantile",
+                "colorRange":{
+                  "name":"Global Warming","type":"sequential","category":"Uber",
+                  "colors":["#ffffcc","#a1dab4","#41b6c4","#2c7fb8","#253494"]
+                },
+                "sizeField":"Traffic Δ (%)","sizeScale":10
+              }
+            }
+          }],
+          "interactionConfig":{
+            "tooltip":{
+              "fieldsToShow":{"pairs":["A","B","Traffic Δ (%)"]},
+              "enabled":True
+            }
+          }
+        },
+        "mapState":{
+          "latitude":centroids["Lat"].mean(),
+          "longitude":centroids["Lon"].mean(),
+          "zoom":2.2,"pitch":30
+        },
+        "mapStyle":{}
+      }
     }
 
-    # 5) render the map (double height)
+    # 5) render (double height)
     kepler_map = KeplerGl(
-        height=1600,
-        data={"pairs": pair_agg},
-        config=kepler_config
+      height=1600,
+      data={"pairs":pair_agg},
+      config=kepler_config
     )
     components.html(kepler_map._repr_html_(), height=1620, scrolling=True)
 
 else:
     st.warning(
-        "Upload coordinate file with 'Origin Lat', 'Origin Lon', "
-        "'Dest Lat' and 'Dest Lon' to see the Kepler map."
+      "Upload coordinates with 'Origin Lat', 'Origin Lon', "
+      "'Dest Lat' and 'Dest Lon' to see the Kepler map."
     )
