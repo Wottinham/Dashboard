@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 from keplergl import KeplerGl
-from streamlit_keplergl import keplergl_static
 import streamlit.components.v1 as components
 
 # ----------------------
@@ -259,7 +258,7 @@ st.dataframe(
     use_container_width=True
 )
 
-# 1) Relative change in passenger volume
+# 1) Barplot by origin country – passenger change
 origin_summary = df.groupby("Origin Country Name", as_index=False).agg({
     "Passengers":               "sum",
     "Passengers after policy":  "sum"
@@ -280,48 +279,6 @@ fig = px.bar(
 fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
 st.plotly_chart(fig, use_container_width=True)
 
-# ────────────────────────────────────────────────────────────────────
-# 2) NEW: Relative price change in average fare by origin country
-price_summary = df.groupby("Origin Country Name", as_index=False).agg({
-    "Fare Δ (%)": "mean"
-})
-price_summary.rename(
-    columns={"Fare Δ (%)": "Relative Price Change (%)"},
-    inplace=True
-)
-fig_price = px.bar(
-    price_summary,
-    x="Origin Country Name",
-    y="Relative Price Change (%)",
-    title="📈 Relative Change in Average Fare by Origin Country",
-    text="Relative Price Change (%)",
-    labels={"Relative Price Change (%)": "Δ Fare (%)"}
-)
-fig_price.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
-st.plotly_chart(fig_price, use_container_width=True)
-
-# 3) NEW: Density plot of passenger distribution by distance
-df_density = pd.concat([
-    df[["Distance (km)", "Passengers"]].assign(Scenario="Before"),
-    df[["Distance (km)", "Passengers after policy"]]
-      .rename(columns={"Passengers after policy": "Passengers"})
-      .assign(Scenario="After")
-], ignore_index=True)
-
-fig_density = px.histogram(
-    df_density,
-    x="Distance (km)",
-    color="Scenario",
-    weights="Passengers",
-    histnorm="density",
-    barmode="overlay",
-    nbins=50,
-    title="📊 Passenger Distribution by Distance: Before vs After Policy"
-)
-fig_density.update_layout(legend_title_text="")
-st.plotly_chart(fig_density, use_container_width=True)
-# ────────────────────────────────────────────────────────────────────
-
 col1, col2 = st.columns(2)
 with col1:
     total_base = df["Passengers"].sum()
@@ -340,5 +297,176 @@ with col2:
 st.info("💡 Each country inherits the global GDP growth unless adjusted manually.")
 st.caption("Data: Sabre MI (or dummy) · Visualization by Streamlit & Plotly")
 
-# ─────── Your existing Kepler map block goes here ───────
-# (unchanged from what you already have)
+# 2) Barplot by origin country – fare change
+origin_price_summary = df.groupby("Origin Country Name", as_index=False).agg({
+    "Fare Δ (%)": "mean"
+})
+origin_price_summary.rename(
+    columns={"Fare Δ (%)": "Avg Fare Δ (%)"},
+    inplace=True
+)
+fig_price = px.bar(
+    origin_price_summary,
+    x="Origin Country Name",
+    y="Avg Fare Δ (%)",
+    title="📈 Relative Change in Average Fare by Origin Country",
+    text="Avg Fare Δ (%)",
+    labels={"Avg Fare Δ (%)": "Δ Fare (%)"}
+)
+fig_price.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
+st.plotly_chart(fig_price, use_container_width=True)
+
+# 3) Density plot of passenger distribution by distance
+df_before = (
+    df[["Distance (km)", "Passengers"]]
+      .rename(columns={"Distance (km)": "Distance_km"})
+      .assign(Scenario="Before")
+)
+df_after = (
+    df[["Distance (km)", "Passengers after policy"]]
+      .rename(columns={
+          "Distance (km)": "Distance_km",
+          "Passengers after policy": "Passengers"
+      })
+      .assign(Scenario="After")
+)
+df_density = pd.concat([df_before, df_after], ignore_index=True)
+
+fig_density = px.histogram(
+    df_density,
+    x="Distance_km",
+    color="Scenario",
+    weights="Passengers",
+    histnorm="density",
+    barmode="overlay",
+    nbins=50,
+    title="📊 Passenger Distribution by Distance: Before vs After Policy",
+    labels={"Distance_km": "Distance (km)"}
+)
+fig_density.update_layout(legend_title_text="")
+st.plotly_chart(fig_density, use_container_width=True)
+
+# ─────── Kepler map (country‐level arcs) ───────
+required_centroid_cols = ["Origin Lat", "Origin Lon", "Dest Lat", "Dest Lon"]
+if all(col in df.columns for col in required_centroid_cols):
+    # 1) build country centroids
+    coords_orig = (
+        df[["Origin Country Name", "Origin Lat", "Origin Lon"]]
+        .rename(columns={
+            "Origin Country Name": "Country",
+            "Origin Lat": "Lat",
+            "Origin Lon": "Lon",
+        })
+    )
+    coords_dest = (
+        df[["Destination Country Name", "Dest Lat", "Dest Lon"]]
+        .rename(columns={
+            "Destination Country Name": "Country",
+            "Dest Lat": "Lat",
+            "Dest Lon": "Lon",
+        })
+    )
+    centroids = (
+        pd.concat([coords_orig, coords_dest], ignore_index=True)
+          .dropna(subset=["Lat", "Lon"])
+          .groupby("Country", as_index=False)[["Lat", "Lon"]]
+          .mean()
+    )
+
+    # 2) aggregate inbound+outbound per unordered country-pair
+    ab = df[["Origin Country Name", "Destination Country Name",
+             "Passengers", "Passengers after policy"]].copy()
+    ab["A"] = np.where(
+        ab["Origin Country Name"] < ab["Destination Country Name"],
+        ab["Origin Country Name"],
+        ab["Destination Country Name"]
+    )
+    ab["B"] = np.where(
+        ab["Origin Country Name"] < ab["Destination Country Name"],
+        ab["Destination Country Name"],
+        ab["Origin Country Name"]
+    )
+    pair_agg = (
+        ab.groupby(["A", "B"], as_index=False)
+          .agg({"Passengers": "sum", "Passengers after policy": "sum"})
+    )
+    pair_agg["Traffic Δ (%)"] = (
+        pair_agg["Passengers after policy"] / pair_agg["Passengers"] - 1
+    ) * 100
+
+    # 3) merge centroids onto A & B
+    pair_agg = (
+        pair_agg
+          .merge(centroids, left_on="A", right_on="Country", how="left")
+          .rename(columns={"Lat": "A Lat", "Lon": "A Lon"})
+          .drop(columns=["Country"])
+          .merge(centroids, left_on="B", right_on="Country", how="left")
+          .rename(columns={"Lat": "B Lat", "Lon": "B Lon"})
+          .drop(columns=["Country"])
+    )
+
+    # 4) Kepler config with an arc layer
+    kepler_config = {
+        "version": "v1",
+        "config": {
+            "visState": {
+                "filters": [],
+                "layers": [{
+                    "id": "arc_layer",
+                    "type": "arc",
+                    "config": {
+                        "dataId": "pairs",
+                        "label": "Traffic Δ (%)",
+                        "columns": {
+                            "lat0": "A Lat",
+                            "lng0": "A Lon",
+                            "lat1": "B Lat",
+                            "lng1": "B Lon"
+                        },
+                        "isVisible": True,
+                        "visConfig": {
+                            "thickness": 3,
+                            "opacity": 0.8,
+                            "colorRange": {
+                                "name": "Global Warming",
+                                "type": "sequential",
+                                "category": "Uber",
+                                "colors": ["#ffffcc","#a1dab4","#41b6c4","#2c7fb8","#253494"]
+                            },
+                            "sizeField": "Traffic Δ (%)",
+                            "sizeScale": 10
+                        }
+                    }
+                }],
+                "interactionConfig": {
+                    "tooltip": {
+                        "fieldsToShow": {
+                            "pairs": ["A","B","Traffic Δ (%)"]
+                        },
+                        "enabled": True
+                    }
+                }
+            },
+            "mapState": {
+                "latitude": centroids["Lat"].mean(),
+                "longitude": centroids["Lon"].mean(),
+                "zoom": 2.2,
+                "pitch": 30
+            },
+            "mapStyle": {}
+        }
+    }
+
+    # 5) render the map (large & scrollable)
+    kepler_map = KeplerGl(
+        height=800,
+        data={"pairs": pair_agg},
+        config=kepler_config
+    )
+    components.html(kepler_map._repr_html_(), height=820, scrolling=True)
+
+else:
+    st.warning(
+        "Upload coordinate file with 'Origin Lat', 'Origin Lon', "
+        "'Dest Lat' and 'Dest Lon' to see the Kepler map."
+    )
