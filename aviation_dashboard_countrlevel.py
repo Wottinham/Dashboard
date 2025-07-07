@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 from keplergl import KeplerGl
-from streamlit_keplergl import keplergl_static
+import streamlit.components.v1 as components
 
 # ----------------------
 # Model configuration (defaults)
@@ -216,7 +216,7 @@ df["Passenger Δ (%)"] = (
     df["Passengers after policy"] / df["Passengers"] - 1
 ) * 100
 
-# Initialize coords so dropna never KeyErrors
+# Initialize coords
 df["Origin Lat"] = np.nan
 df["Origin Lon"] = np.nan
 df["Dest Lat"]   = np.nan
@@ -322,7 +322,6 @@ df_after = df[["Distance (km)", "Passengers after policy"]].rename(
     columns={"Distance (km)": "Distance_km", "Passengers after policy": "Count"}
 )
 
-# compute a common bin range
 min_d = min(df_before["Distance_km"].min(), df_after["Distance_km"].min())
 max_d = max(df_before["Distance_km"].max(), df_after["Distance_km"].max())
 bins  = np.linspace(min_d, max_d, 50)
@@ -351,7 +350,7 @@ fig_density = px.line(
 fig_density.update_traces(line_shape="spline")
 st.plotly_chart(fig_density, use_container_width=True)
 
-# ─────── Kepler country‐level arcs ───────
+# ─────── Kepler country‐level arcs (now forced full‐size) ───────
 required_centroid_cols = ["Origin Lat", "Origin Lon", "Dest Lat", "Dest Lon"]
 if all(col in df.columns for col in required_centroid_cols):
     # 1) centroids
@@ -435,13 +434,16 @@ if all(col in df.columns for col in required_centroid_cols):
       }
     }
 
-    # 5) render via keplergl_static at 1,600px high
+    # 5) render by decoding HTML and forcing 1600×1600 pixels
     kepler_map = KeplerGl(
       height=1600,
       data={"pairs":pair_agg},
       config=kepler_config
     )
-    keplergl_static(kepler_map, height=1600)
+    raw_html = kepler_map._repr_html_()
+    if isinstance(raw_html, bytes):
+        raw_html = raw_html.decode("utf-8")
+    components.html(raw_html, height=1600, width=1600)
 
 else:
     st.warning(
