@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-import plotly.figure_factory as ff
+import plotly.graph_objects as go
 from keplergl import KeplerGl
 import streamlit.components.v1 as components
 
@@ -76,7 +76,7 @@ dest_all   = sorted(df["Destination Country Name"].unique())
 # ----------------------
 enable_carbon = st.sidebar.checkbox("Enable carbon pricing?")
 if enable_carbon:
-    ets_price = st.sidebar.slider("Carbon price (EUR/tCO₂)", 0,400,100,5)
+    ets_price = st.sidebar.slider("Carbon price (EUR / tCO₂)", 0, 400, 100, 5)
     carbon_origin_countries = st.sidebar.multiselect(
         "Carbon: Origin countries", origin_all, default=origin_all)
     carbon_dest_countries   = st.sidebar.multiselect(
@@ -91,7 +91,7 @@ else:
 # ----------------------
 enable_tax = st.sidebar.checkbox("Enable air passenger tax?")
 if enable_tax:
-    air_passenger_tax = st.sidebar.slider("Air Passenger Tax (USD)", 0,100,10,1)
+    air_passenger_tax = st.sidebar.slider("Air Passenger Tax (USD)", 0, 100, 10, 1)
     tax_origin_countries = st.sidebar.multiselect(
         "Tax: Origin countries", origin_all, default=origin_all)
     tax_dest_countries   = st.sidebar.multiselect(
@@ -105,26 +105,22 @@ else:
 # Parameters
 # ----------------------
 st.sidebar.markdown("### Parameters")
-pass_through = st.sidebar.slider(
-    "Cost pass-through (%)", 0,100,80,5) / 100
-emission_factor = st.sidebar.slider(
-    "Emission factor (kg CO₂/pax-km)", 0.0,1.0,0.115,0.001)
+pass_through     = st.sidebar.slider("Cost pass-through (%)", 0, 100, 80, 5) / 100
+emission_factor  = st.sidebar.slider("Emission factor (kg CO₂/pax-km)", 0.0, 1.0, 0.115, 0.001)
 
 # ----------------------
 # Economic inputs
 # ----------------------
-global_gdp_growth = st.sidebar.slider("Global GDP growth (%)", -5.0,8.0,2.5,0.1)
-user_price_elast  = st.sidebar.slider(
-    "Price elasticity", -2.0,-0.1,PRICE_ELASTICITY_DEMAND,0.1)
-user_gdp_elast    = st.sidebar.slider(
-    "GDP elasticity", 0.5,2.0,GDP_ELASTICITY_DEMAND,0.1)
+global_gdp_growth   = st.sidebar.slider("Global GDP growth (%)", -5.0, 8.0, 2.5, 0.1)
+user_price_elast    = st.sidebar.slider("Price elasticity (neg.)", -2.0, -0.1, PRICE_ELASTICITY_DEMAND, 0.1)
+user_gdp_elast      = st.sidebar.slider("GDP elasticity", 0.5, 2.0, GDP_ELASTICITY_DEMAND, 0.1)
 
 st.sidebar.markdown("### Optional GDP by Origin")
 gdp_growth_by_country = {}
 with st.sidebar.expander("Customize GDP Growth"):
     for c in origin_all:
         gdp_growth_by_country[c] = st.sidebar.slider(
-            f"{c} GDP (%)", -5.0,8.0,global_gdp_growth,0.1,
+            f"{c} GDP growth (%)", -5.0, 8.0, global_gdp_growth, 0.1,
             key=f"gdp_{c}"
         )
 
@@ -154,24 +150,24 @@ if enable_tax:
     )
     df.loc[mask_t, "Air passenger tax per pax"] = air_passenger_tax * pass_through
 
-# New fare & changes
+# New fare & fare Δ
 df["New Avg Fare"] = (
-    df["Avg. Total Fare(USD)"] +
-    df["Carbon cost per pax"] +
-    df["Air passenger tax per pax"]
+    df["Avg. Total Fare(USD)"]
+    + df["Carbon cost per pax"]
+    + df["Air passenger tax per pax"]
 )
 df["Fare Δ (%)"] = (df["New Avg Fare"] / df["Avg. Total Fare(USD)"] - 1) * 100
 
-# Elasticity & GDP
+# Elasticity & GDP adjustments
 fare_factor = (
     (df["New Avg Fare"] / df["Avg. Total Fare(USD)"])
-    .replace([np.inf,-np.inf],np.nan) ** user_price_elast
+    .replace([np.inf, -np.inf], np.nan) ** user_price_elast
 )
 df["GDP Growth (%)"] = (
     df["Origin Country Name"].map(gdp_growth_by_country)
     .fillna(global_gdp_growth)
 )
-df["GDP Growth Factor"] = (1 + df["GDP Growth (%)"]/100)**user_gdp_elast
+df["GDP Growth Factor"] = (1 + df["GDP Growth (%)"]/100) ** user_gdp_elast
 
 df["Passengers after policy"] = (
     df["Passengers"] * fare_factor * df["GDP Growth Factor"]
@@ -180,7 +176,7 @@ df["Passenger Δ (%)"] = (
     df["Passengers after policy"] / df["Passengers"] - 1
 ) * 100
 
-# Prepare coords columns
+# Add coordinate columns (initialized)
 df["Origin Lat"] = np.nan; df["Origin Lon"] = np.nan
 df["Dest Lat"]   = np.nan; df["Dest Lon"]   = np.nan
 
@@ -200,11 +196,11 @@ if coord_file:
             df["Dest Lat"]    = df["Dest Code"].map(cmap["DecLat"])
             df["Dest Lon"]    = df["Dest Code"].map(cmap["DecLon"])
         else:
-            st.warning("Coords missing IATA_Code/DecLat/DecLon.")
+            st.warning("❌ Coords file missing IATA_Code/DecLat/DecLon.")
     except ImportError:
-        st.warning("Install openpyxl: `pip install openpyxl`.")
+        st.warning("❌ Install openpyxl: `pip install openpyxl`.")
     except Exception as e:
-        st.warning(f"Failed to process coords: {e}")
+        st.warning(f"❌ Failed to process coords: {e}")
 
 # ----------------------
 # Table & bar charts
@@ -222,13 +218,16 @@ origin_sum = df.groupby("Origin Country Name", as_index=False).agg({
     "Passengers":"sum","Passengers after policy":"sum"
 })
 origin_sum["Δ Passengers (%)"] = (
-    origin_sum["Passengers after policy"]/origin_sum["Passengers"] - 1
-)*100
+    origin_sum["Passengers after policy"] / origin_sum["Passengers"] - 1
+) * 100
 
-fig1 = px.bar(origin_sum,
-              x="Origin Country Name", y="Δ Passengers (%)",
-              title="📉 Δ Passenger Volume by Origin Country",
-              text="Δ Passengers (%)")
+fig1 = px.bar(
+    origin_sum,
+    x="Origin Country Name", y="Δ Passengers (%)",
+    title="📉 Relative Change in Passenger Volume by Origin Country",
+    text="Δ Passengers (%)",
+    labels={"Δ Passengers (%)":"% Δ Passengers"}
+)
 fig1.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
 st.plotly_chart(fig1, use_container_width=True)
 
@@ -236,10 +235,13 @@ st.plotly_chart(fig1, use_container_width=True)
 fare_sum = df.groupby("Origin Country Name", as_index=False).agg({
     "Fare Δ (%)":"mean"
 }).rename(columns={"Fare Δ (%)":"Avg Δ Fare (%)"})
-fig2 = px.bar(fare_sum,
-              x="Origin Country Name", y="Avg Δ Fare (%)",
-              title="📈 Δ Average Fare by Origin Country",
-              text="Avg Δ Fare (%)")
+fig2 = px.bar(
+    fare_sum,
+    x="Origin Country Name", y="Avg Δ Fare (%)",
+    title="📈 Relative Change in Average Fare by Origin Country",
+    text="Avg Δ Fare (%)",
+    labels={"Avg Δ Fare (%)":"% Δ Fare"}
+)
 fig2.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
 st.plotly_chart(fig2, use_container_width=True)
 
@@ -250,54 +252,67 @@ df_before = df[["Distance (km)","Passengers"]].rename(
 df_after = df[["Distance (km)","Passengers after policy"]].rename(
     columns={"Distance (km)":"Distance_km","Passengers after policy":"Count"}
 )
-# build lists weighted by count
-dist_before = np.repeat(df_before["Distance_km"], df_before["Count"].astype(int))
-dist_after  = np.repeat(df_after["Distance_km"], df_after["Count"].astype(int))
-dist_range  = dist_before.max() - dist_before.min() if len(dist_before)>0 else 1
-bin_size    = dist_range / 50 if dist_range>0 else 1
 
-fig3 = ff.create_distplot(
-    [dist_before.tolist(), dist_after.tolist()],
-    ["Before","After"],
-    bin_size=bin_size,
-    show_hist=False,
-    show_rug=False
+# compute histogram-based densities
+bins        = 50
+min_d, max_d = df_before["Distance_km"].min(), df_before["Distance_km"].max()
+hist_b, edges = np.histogram(
+    df_before["Distance_km"], bins=bins,
+    weights=df_before["Count"], density=True,
+    range=(min_d, max_d)
 )
+hist_a, _     = np.histogram(
+    df_after["Distance_km"], bins=bins,
+    weights=df_after["Count"], density=True,
+    range=(min_d, max_d)
+)
+centers       = (edges[:-1] + edges[1:]) / 2
+
+fig3 = go.Figure()
+fig3.add_trace(go.Scatter(
+    x=centers, y=hist_b, mode="lines", name="Before"))
+fig3.add_trace(go.Scatter(
+    x=centers, y=hist_a, mode="lines", name="After"))
 fig3.update_layout(
-    title="📊 Passenger Distance Distribution: Before vs After",
+    title="📊 Passenger Distance Density: Before vs After",
     xaxis_title="Distance (km)",
     yaxis_title="Density"
 )
 st.plotly_chart(fig3, use_container_width=True)
 
-# ─────── Kepler country arcs (double height) ───────
+# ─────── Kepler country‐level arcs (double height) ───────
 req = ["Origin Lat","Origin Lon","Dest Lat","Dest Lon"]
 if all(c in df.columns for c in req):
-    # centroids
+    # compute centroids
     o = df[["Origin Country Name","Origin Lat","Origin Lon"]].rename(
-        columns={"Origin Country Name":"Country","Origin Lat":"Lat","Origin Lon":"Lon"}
-    )
+        columns={"Origin Country Name":"Country",
+                 "Origin Lat":"Lat","Origin Lon":"Lon"})
     d = df[["Destination Country Name","Dest Lat","Dest Lon"]].rename(
-        columns={"Destination Country Name":"Country","Dest Lat":"Lat","Dest Lon":"Lon"}
-    )
-    cents = pd.concat([o,d]).dropna(subset=["Lat","Lon"])\
-        .groupby("Country",as_index=False)[["Lat","Lon"]].mean()
+        columns={"Destination Country Name":"Country",
+                 "Dest Lat":"Lat","Dest Lon":"Lon"})
+    cents = pd.concat([o,d])\
+        .dropna(subset=["Lat","Lon"])\
+        .groupby("Country", as_index=False)[["Lat","Lon"]].mean()
 
-    # pair aggregation
-    ab = df[["Origin Country Name","Destination Country Name",
-             "Passengers","Passengers after policy"]].copy()
-    ab["A"] = np.minimum(ab["Origin Country Name"], ab["Destination Country Name"])
-    ab["B"] = np.maximum(ab["Origin Country Name"], ab["Destination Country Name"])
-    pairs = ab.groupby(["A","B"],as_index=False).sum()
-    pairs["Δ (%)"] = (pairs["Passengers after policy"]/pairs["Passengers"] - 1)*100
+    # aggregate pairs
+    pairs = df[[
+        "Origin Country Name","Destination Country Name",
+        "Passengers","Passengers after policy"
+    ]].copy()
+    pairs["A"] = np.minimum(
+        pairs["Origin Country Name"], pairs["Destination Country Name"])
+    pairs["B"] = np.maximum(
+        pairs["Origin Country Name"], pairs["Destination Country Name"])
+    agg = pairs.groupby(["A","B"], as_index=False).sum()
+    agg["Δ (%)"] = (agg["Passengers after policy"]/agg["Passengers"] - 1)*100
 
     # merge coords
-    pairs = (pairs
-             .merge(cents, left_on="A", right_on="Country").rename(
-                columns={"Lat":"A Lat","Lon":"A Lon"}).drop("Country",axis=1)
-             .merge(cents, left_on="B", right_on="Country").rename(
-                columns={"Lat":"B Lat","Lon":"B Lon"}).drop("Country",axis=1)
-    )
+    agg = agg.merge(
+        cents, left_on="A", right_on="Country", how="left"
+    ).rename(columns={"Lat":"A Lat","Lon":"A Lon"}).drop("Country",axis=1)
+    agg = agg.merge(
+        cents, left_on="B", right_on="Country", how="left"
+    ).rename(columns={"Lat":"B Lat","Lon":"B Lon"}).drop("Country",axis=1)
 
     # kepler config
     cfg = {
@@ -323,16 +338,23 @@ if all(c in df.columns for c in req):
           "tooltip":{"fieldsToShow":{"pairs":["A","B","Δ (%)"]},"enabled":True}
         }},
         "mapState":{
-          "latitude":cents["Lat"].mean(),
-          "longitude":cents["Lon"].mean(),
+          "latitude": cents["Lat"].mean(),
+          "longitude": cents["Lon"].mean(),
           "zoom":2.2,"pitch":30
         },
         "mapStyle":{}
       }
     }
 
-    kp = KeplerGl(height=1600,data={"pairs":pairs},config=cfg)
-    components.html(kp._repr_html_(), height=1620, scrolling=True)
+    kepler_map = KeplerGl(
+        height=1600, data={"pairs":agg}, config=cfg
+    )
+    components.html(
+        kepler_map._repr_html_(), height=1620, scrolling=True
+    )
 
 else:
-    st.warning("Upload coords with 'Origin Lat', 'Origin Lon', 'Dest Lat', 'Dest Lon' to view Kepler map.")
+    st.warning(
+        "Upload coords with 'Origin Lat','Origin Lon','Dest Lat','Dest Lon' "
+        "to view the Kepler map."
+    )
