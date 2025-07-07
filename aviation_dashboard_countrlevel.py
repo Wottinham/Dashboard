@@ -443,7 +443,7 @@ if all(col in df.columns for col in required_centroid_cols):
     raw_html = kepler_map._repr_html_()
     if isinstance(raw_html, bytes):
         raw_html = raw_html.decode("utf-8")
-    components.html(raw_html, height=1600, width=1600)
+    components.html(raw_html, height=1200, width=1800)
 
 else:
     st.warning(
