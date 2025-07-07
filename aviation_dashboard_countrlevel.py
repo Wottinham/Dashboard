@@ -335,15 +335,15 @@ df_density = pd.concat([df_before, df_after], ignore_index=True)
 fig_density = px.histogram(
     df_density,
     x="Distance_km",
+    y="Passengers",
     color="Scenario",
-    weight="Passengers",
+    histfunc="sum",
     histnorm="density",
     barmode="overlay",
     nbins=50,
     title="📊 Passenger Distribution by Distance: Before vs After Policy",
-    labels={"Distance_km": "Distance (km)"}
+    labels={"Distance_km": "Distance (km)", "Passengers": "Density"}
 )
-fig_density.update_layout(legend_title_text="")
 st.plotly_chart(fig_density, use_container_width=True)
 
 # ─────── Kepler map (country‐level arcs) ───────
