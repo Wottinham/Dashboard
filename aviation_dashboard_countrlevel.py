@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import plotly.figure_factory as ff
 from keplergl import KeplerGl
 import streamlit.components.v1 as components
 
@@ -316,7 +317,7 @@ fig_price = px.bar(
 fig_price.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
 st.plotly_chart(fig_price, use_container_width=True)
 
-# 3) Density plot of passenger distribution by distance
+# 3) Density curves of passenger distribution by distance
 df_before = (
     df[["Distance (km)", "Passengers"]]
       .rename(columns={"Distance (km)": "Distance_km"})
@@ -330,19 +331,22 @@ df_after = (
       })
       .assign(Scenario="After")
 )
-df_density = pd.concat([df_before, df_after], ignore_index=True)
+# use only the Distance series for each scenario
+data_before = df_before["Distance_km"].tolist()
+data_after = df_after["Distance_km"].tolist()
+bin_size = (df_density := pd.concat([df_before, df_after]))["Distance_km"].ptp() / 50
 
-fig_density = px.histogram(
-    df_density,
-    x="Distance_km",
-    y="Passengers",
-    color="Scenario",
-    histfunc="sum",
-    histnorm="density",
-    barmode="overlay",
-    nbins=50,
-    title="📊 Passenger Distribution by Distance: Before vs After Policy",
-    labels={"Distance_km": "Distance (km)", "Passengers": "Density"}
+fig_density = ff.create_distplot(
+    [data_before, data_after],
+    ["Before", "After"],
+    bin_size=bin_size,
+    show_hist=False,
+    show_rug=False
+)
+fig_density.update_layout(
+    title="📊 Passenger Distance Distribution: Before vs After Policy",
+    xaxis_title="Distance (km)",
+    yaxis_title="Density"
 )
 st.plotly_chart(fig_density, use_container_width=True)
 
@@ -405,7 +409,7 @@ if all(col in df.columns for col in required_centroid_cols):
           .drop(columns=["Country"])
     )
 
-    # 4) Kepler config with an arc layer
+    # 4) Kepler config with arcs colored by relative change
     kepler_config = {
         "version": "v1",
         "config": {
@@ -427,14 +431,14 @@ if all(col in df.columns for col in required_centroid_cols):
                         "visConfig": {
                             "thickness": 3,
                             "opacity": 0.8,
+                            "colorField": {"name": "Traffic Δ (%)", "type": "real"},
+                            "colorScale": "quantile",
                             "colorRange": {
                                 "name": "Global Warming",
                                 "type": "sequential",
                                 "category": "Uber",
                                 "colors": ["#ffffcc","#a1dab4","#41b6c4","#2c7fb8","#253494"]
-                            },
-                            "sizeField": "Traffic Δ (%)",
-                            "sizeScale": 10
+                            }
                         }
                     }
                 }],
@@ -457,13 +461,13 @@ if all(col in df.columns for col in required_centroid_cols):
         }
     }
 
-    # 5) render the map (large & scrollable)
+    # 5) render the map at double height
     kepler_map = KeplerGl(
-        height=800,
+        height=1600,
         data={"pairs": pair_agg},
         config=kepler_config
     )
-    components.html(kepler_map._repr_html_(), height=820, scrolling=True)
+    components.html(kepler_map._repr_html_(), height=1620, scrolling=True)
 
 else:
     st.warning(
