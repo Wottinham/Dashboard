@@ -289,10 +289,7 @@ with col1:
         delta=f"{(total_new/total_base-1)*100:+.1f}%"
     )
 with col2:
-    st.metric(
-        "Avg. Carbon Cost (€)",
-        f"{df['Carbon cost per pax'].mean():.2f}"
-    )
+    st.metric("Avg. Carbon Cost (€)", f"{df['Carbon cost per pax'].mean():.2f}")
 
 st.info("💡 Each country inherits the global GDP growth unless adjusted manually.")
 st.caption("Data: Sabre MI (or dummy) · Visualization by Streamlit & Plotly")
@@ -318,13 +315,17 @@ fig_price.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
 st.plotly_chart(fig_price, use_container_width=True)
 
 # ----------------------
-# 3) Overlaid density histogram
+# 3) Overlaid density histogram – now both lines appear
 # ----------------------
-df_density = pd.concat([
-    df.assign(Scenario="Before")[["Distance (km)", "Passengers"]],
-    df.assign(Scenario="After")[["Distance (km)", "Passengers after policy"]]
-      .rename(columns={"Passengers after policy": "Passengers"})
-], ignore_index=True)
+# build before/after with explicit Scenario column
+df_before = df[["Distance (km)", "Passengers"]].copy()
+df_before["Scenario"] = "Before"
+
+df_after  = df[["Distance (km)", "Passengers after policy"]].copy()
+df_after.rename(columns={"Passengers after policy": "Passengers"}, inplace=True)
+df_after["Scenario"] = "After"
+
+df_density = pd.concat([df_before, df_after], ignore_index=True)
 
 fig_density = px.histogram(
     df_density,
