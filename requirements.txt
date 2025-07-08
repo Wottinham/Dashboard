@@ -6,3 +6,4 @@ numpy
 keplergl
 streamlit-keplergl
 openpyxl
+statsmodels
