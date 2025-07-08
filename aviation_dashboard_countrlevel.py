@@ -74,9 +74,14 @@ if is_panel:
     st.sidebar.header("Regression Settings")
     numeric_cols = df.select_dtypes(include="number").columns.tolist()
     dep_var      = st.sidebar.selectbox("Dependent variable", numeric_cols)
-    indep_vars   = st.sidebar.multiselect("Independent variables", numeric_cols, default=[c for c in numeric_cols if c != dep_var][:2])
-    unit_fe      = st.sidebar.selectbox("Unit FE (panel ID)", ["OD Pair"])
-    time_fe      = st.sidebar.selectbox("Time FE", ["Year"])
+    indep_vars   = st.sidebar.multiselect(
+        "Independent variables", numeric_cols,
+        default=[c for c in numeric_cols if c != dep_var][:2]
+    )
+
+    # Now allow “None” or pick the available FE dimensions
+    unit_fe      = st.sidebar.selectbox("Unit FE (panel ID)", ["None", "OD Pair"])
+    time_fe      = st.sidebar.selectbox("Time FE", ["None", "Year"])
 
     if st.sidebar.button("Run Regression"):
         if not dep_var or not indep_vars:
@@ -85,21 +90,27 @@ if is_panel:
             # 1) sanitize column names for Patsy
             reg_df = df.copy()
             rename_map = {}
-            for col in [dep_var] + indep_vars + [unit_fe, time_fe]:
-                clean = re.sub(r"\W+", "_", col)
-                rename_map[col] = clean
+            for col in [dep_var] + indep_vars + ([unit_fe] if unit_fe!="None" else []) + ([time_fe] if time_fe!="None" else []):
+                if col != "None":
+                    clean = re.sub(r"\W+", "_", col)
+                    rename_map[col] = clean
             reg_df = reg_df.rename(columns=rename_map)
 
             # 2) rebuild formula on clean names
             dv = rename_map[dep_var]
             ivs = [rename_map[v] for v in indep_vars]
-            UF = rename_map[unit_fe]
-            TF = rename_map[time_fe]
+            fe_terms = []
+            if unit_fe != "None":
+                UF = rename_map[unit_fe]
+                fe_terms.append(f"C({UF})")
+            if time_fe != "None":
+                TF = rename_map[time_fe]
+                fe_terms.append(f"C({TF})")
 
-            formula = f"{dv} ~ " + " + ".join(ivs + [f"C({UF})", f"C({TF})"])
+            formula = dv + " ~ " + " + ".join(ivs + fe_terms)
             try:
                 model = smf.ols(formula=formula, data=reg_df) \
-                           .fit(cov_type="cluster", cov_kwds={"groups": reg_df[UF]})
+                           .fit(cov_type="cluster", cov_kwds={"groups": reg_df[rename_map.get(unit_fe,dep_var)]})
                 st.subheader("Regression Results")
                 st.text(model.summary().as_text())
             except Exception as e:
