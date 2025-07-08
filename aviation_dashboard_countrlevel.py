@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import plotly.graph_objects as go
 from keplergl import KeplerGl
 import streamlit.components.v1 as components
 
@@ -264,8 +265,8 @@ origin_summary = df.groupby("Origin Country Name", as_index=False).agg({
     "Passengers after policy": "sum"
 })
 origin_summary["Relative Change (%)"] = (
-    origin_summary["Passengers after policy"]
-    / origin_summary["Passengers"] - 1
+    origin_summary["Passengers after policy"] /
+    origin_summary["Passengers"] - 1
 ) * 100
 
 fig = px.bar(
@@ -318,7 +319,7 @@ fig_price.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
 st.plotly_chart(fig_price, use_container_width=True)
 
 # ----------------------
-# 3) Smoothed relative‐share curves of passenger distances
+# 3) Smoothed relative-share curves of passenger distances
 # ----------------------
 # Prepare two series
 df_before = df[["Distance (km)", "Passengers"]].rename(
@@ -328,7 +329,7 @@ df_after = df[["Distance (km)", "Passengers after policy"]].rename(
     columns={"Distance (km)": "Distance_km", "Passengers after policy": "Count"}
 )
 
-# common bin edges
+# Compute common bins
 min_d = min(df_before["Distance_km"].min(), df_after["Distance_km"].min())
 max_d = max(df_before["Distance_km"].max(), df_after["Distance_km"].max())
 bins  = np.linspace(min_d, max_d, 50)
@@ -339,8 +340,11 @@ for label, subset in [("Before", df_before), ("After", df_after)]:
     w = subset["Count"].to_numpy()
     hist, edges = np.histogram(x, bins=bins, weights=w, density=False)
     centers = 0.5 * (edges[:-1] + edges[1:])
-    # here: convert to relative share
-    share = hist / hist.sum()  
+    total_w = w.sum()
+    if total_w > 0:
+        share = hist / total_w
+    else:
+        share = np.zeros_like(hist)
     dens_list.append(pd.DataFrame({
         "Distance (km)": centers,
         "Share": share,
@@ -348,21 +352,29 @@ for label, subset in [("Before", df_before), ("After", df_after)]:
     }))
 
 dens_df = pd.concat(dens_list, ignore_index=True)
-fig_density = px.line(
-    dens_df,
-    x="Distance (km)",
-    y="Share",
-    color="Scenario",
+
+# Build a two‐trace, zero-based density plot
+fig_density = go.Figure()
+for scenario, grp in dens_df.groupby("Scenario"):
+    fig_density.add_trace(go.Scatter(
+        x=grp["Distance (km)"],
+        y=grp["Share"],
+        mode="lines",
+        name=scenario,
+        line_shape="spline"
+    ))
+fig_density.update_layout(
     title="📊 Passenger Distance Distribution (Relative Share): Before vs After",
-    labels={"Share": "Relative Share", "Distance (km)": "Distance (km)"}
+    xaxis_title="Distance (km)",
+    yaxis_title="Relative Share",
+    yaxis=dict(range=[0, dens_df["Share"].max() * 1.05])
 )
-fig_density.update_traces(line_shape="spline")
 st.plotly_chart(fig_density, use_container_width=True)
 
 # ─────── Kepler country‐level arcs (full‐size) ───────
 required_centroid_cols = ["Origin Lat", "Origin Lon", "Dest Lat", "Dest Lon"]
 if all(col in df.columns for col in required_centroid_cols):
-    # build centroids
+    # 1) centroids
     coords_orig = df[["Origin Country Name", "Origin Lat", "Origin Lon"]].rename(
         columns={"Origin Country Name":"Country","Origin Lat":"Lat","Origin Lon":"Lon"}
     )
@@ -371,11 +383,11 @@ if all(col in df.columns for col in required_centroid_cols):
     )
     centroids = (
         pd.concat([coords_orig, coords_dest], ignore_index=True)
-          .dropna(subset=["Lat", "Lon"])
-          .groupby("Country", as_index=False)[["Lat", "Lon"]].mean()
+          .dropna(subset=["Lat","Lon"])
+          .groupby("Country", as_index=False)[["Lat","Lon"]].mean()
     )
 
-    # aggregate unordered country‐pairs
+    # 2) unordered country‐pair aggregation
     ab = df[["Origin Country Name","Destination Country Name",
              "Passengers","Passengers after policy"]].copy()
     ab["A"], ab["B"] = np.where(
@@ -388,10 +400,10 @@ if all(col in df.columns for col in required_centroid_cols):
           .agg({"Passengers":"sum","Passengers after policy":"sum"})
     )
     pair_agg["Traffic Δ (%)"] = (
-        pair_agg["Passengers after policy"]/pair_agg["Passengers"] - 1
+        pair_agg["Passengers after policy"] / pair_agg["Passengers"] - 1
     ) * 100
 
-    # merge centroids
+    # 3) merge centroids
     pair_agg = (
         pair_agg
           .merge(centroids, left_on="A", right_on="Country", how="left")
@@ -402,7 +414,7 @@ if all(col in df.columns for col in required_centroid_cols):
           .drop(columns=["Country"])
     )
 
-    # kepler config
+    # 4) Kepler config (color by Traffic Δ (%))
     kepler_config = {
       "version":"v1","config":{
         "visState":{"filters":[],"layers":[{
@@ -435,7 +447,7 @@ if all(col in df.columns for col in required_centroid_cols):
       }
     }
 
-    # render map at double size
+    # 5) render at double size
     kepler_map = KeplerGl(
       height=1600,
       data={"pairs": pair_agg},
