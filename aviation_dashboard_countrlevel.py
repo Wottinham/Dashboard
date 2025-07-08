@@ -312,37 +312,40 @@ with sim_tab:
     fig2.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
     st.plotly_chart(fig2, use_container_width=True)
 
-    # Density plot: distance distribution
+        # 3) Smoothed passenger‐count curves of distance
     df_before = df[["Distance (km)", "Passengers"]].rename(
         columns={"Distance (km)": "Distance_km", "Passengers": "Count"}
     )
     df_after = df[["Distance (km)", "Passengers after policy"]].rename(
         columns={"Distance (km)": "Distance_km", "Passengers after policy": "Count"}
     )
-    # build smoothed densities
-    min_d, max_d = df_before["Distance_km"].min(), df_before["Distance_km"].max()
-    min_d = min(min_d, df_after["Distance_km"].min())
-    max_d = max(max_d, df_after["Distance_km"].max())
+
+    # determine common bin edges
+    min_d = min(df_before["Distance_km"].min(), df_after["Distance_km"].min())
+    max_d = max(df_before["Distance_km"].max(), df_after["Distance_km"].max())
     bins = np.linspace(min_d, max_d, 50)
+
     dens_list = []
     for label, subset in [("Before", df_before), ("After", df_after)]:
         x = subset["Distance_km"].to_numpy()
         w = subset["Count"].to_numpy()
-        hist, edges = np.histogram(x, bins=bins, weights=w, density=True)
+        # sum of passengers in each bin (no normalization)
+        hist, edges = np.histogram(x, bins=bins, weights=w, density=False)
         centers = 0.5 * (edges[:-1] + edges[1:])
         dens_list.append(pd.DataFrame({
             "Distance (km)": centers,
-            "Density": hist,
+            "Passengers": hist,
             "Scenario": label
         }))
+
     dens_df = pd.concat(dens_list, ignore_index=True)
     fig3 = px.line(
         dens_df,
         x="Distance (km)",
-        y="Density",
+        y="Passengers",
         color="Scenario",
-        title="📊 Passenger Distance Density: Before vs After",
-        labels={"Density": "Density", "Distance (km)": "Distance (km)"}
+        title="📊 Passenger Distribution by Distance: Before vs After",
+        labels={"Passengers": "Passengers", "Distance (km)": "Distance (km)"}
     )
     fig3.update_traces(line_shape="spline")
     st.plotly_chart(fig3, use_container_width=True)
