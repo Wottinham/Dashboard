@@ -117,14 +117,14 @@ df["CO2 per pax (kg)"] = df["Distance (km)"] * emission_factor
 # carbon cost
 df["Carbon cost per pax"] = 0.0
 if enable_carbon:
-    m = df["Origin Country Name"].isin(carbon_orig) & df["Destination Country Name"].isin(carbon_dest)
-    df.loc[m, "Carbon cost per pax"] = df.loc[m, "CO2 per pax (kg)"] / 1000 * ets_price * pass_through
+    mask = df["Origin Country Name"].isin(carbon_orig) & df["Destination Country Name"].isin(carbon_dest)
+    df.loc[mask, "Carbon cost per pax"] = df.loc[mask, "CO2 per pax (kg)"] / 1000 * ets_price * pass_through
 
 # ticket tax
 df["Ticket tax per pax"] = 0.0
 if enable_tax:
-    m = df["Origin Country Name"].isin(tax_orig) & df["Destination Country Name"].isin(tax_dest)
-    df.loc[m, "Ticket tax per pax"] = air_tax * pass_through
+    mask = df["Origin Country Name"].isin(tax_orig) & df["Destination Country Name"].isin(tax_dest)
+    df.loc[mask, "Ticket tax per pax"] = air_tax * pass_through
 
 # new fare & %Δ
 df["New Avg Fare"] = df["Avg. Total Fare(USD)"] + df["Carbon cost per pax"] + df["Ticket tax per pax"]
@@ -146,8 +146,7 @@ df["Origin Lat"]=df["Origin Lon"]=df["Dest Lat"]=df["Dest Lon"]=np.nan
 # ----------------------
 if coord_file:
     try:
-        coords = pd.read_excel(coord_file, engine="openpyxl")\
-                   .drop_duplicates("IATA_Code")
+        coords = pd.read_excel(coord_file, engine="openpyxl").drop_duplicates("IATA_Code")
         if {"IATA_Code","DecLat","DecLon"}.issubset(coords.columns):
             cmap = coords.set_index("IATA_Code")[["DecLat","DecLon"]]
             df["Origin Code"] = df["Origin Airport"].str.partition("-")[0]
@@ -175,7 +174,7 @@ with tab1:
         "New Avg Fare","Passenger Δ (%)"
     ]], use_container_width=True)
 
-    # Bar #1 – passenger Δ
+    # 1) Passenger Δ bar
     or_sum = df.groupby("Origin Country Name",as_index=False).agg(
         Passengers=("Passengers","sum"),
         After=("Passengers after policy","sum")
@@ -183,31 +182,44 @@ with tab1:
     or_sum["Δ (%)"] = (or_sum["After"]/or_sum["Passengers"]-1)*100
     fig1 = px.bar(or_sum, "Origin Country Name","Δ (%)",
                   title="Δ Passenger Vol. by Origin")
-    st.plotly_chart(fig1,use_container_width=True)
+    st.plotly_chart(fig1, use_container_width=True)
 
-    # Bar #2 – fare Δ
+    # 2) Fare Δ bar
     pr_sum = df.groupby("Origin Country Name",as_index=False)["Fare Δ (%)"].mean()
-    fig2 = px.bar(pr_sum,"Origin Country Name","Fare Δ (%)",
+    fig2 = px.bar(pr_sum, "Origin Country Name","Fare Δ (%)",
                   title="Δ Avg Fare by Origin")
-    st.plotly_chart(fig2,use_container_width=True)
+    st.plotly_chart(fig2, use_container_width=True)
 
-    # Density
-    df_b = df[["Distance (km)","Passengers"]].rename(
-        columns={"Distance (km)":"Dist","Passengers":"Cnt"})
-    df_a = df[["Distance (km)","Passengers after policy"]].rename(
-        columns={"Distance (km)":"Dist","Passengers after policy":"Cnt"})
-    fig_d = go.Figure()
-    for label, sub in [("Before",df_b),("After",df_a)]:
-        x = sub["Dist"].to_numpy()
-        w = sub["Cnt"].to_numpy()
-        kde = gaussian_kde(x,weights=w)
-        xs = np.linspace(x.min(),x.max(),200)
-        fig_d.add_trace(go.Scatter(x=xs,y=kde(xs),
-                                   mode="lines",fill="tozeroy",name=label))
-    fig_d.update_layout(title="Passenger Distance Density")
-    st.plotly_chart(fig_d,use_container_width=True)
+    # 3) **Smoothed density** curves
+    # prepare combined x-grid
+    all_dist = df["Distance (km)"].dropna()
+    if len(all_dist)>1:
+        xs = np.linspace(all_dist.min(), all_dist.max(), 200)
+        fig_d = go.Figure()
+        for label, subdf in [("Before", df[["Distance (km)","Passengers"]].rename(columns={"Passengers":"Cnt","Distance (km)":"Dist"})),
+                              ("After",  df[["Distance (km)","Passengers after policy"]]
+                                           .rename(columns={"Passengers after policy":"Cnt","Distance (km)":"Dist"}))]:
+            x = subdf["Dist"].to_numpy()
+            w = subdf["Cnt"].to_numpy()
+            # guard zero‐weight or no variance
+            if w.sum() <= 0 or np.nanstd(x) == 0:
+                y = np.zeros_like(xs)
+            else:
+                try:
+                    kde = gaussian_kde(x, weights=w)
+                    y = kde(xs)
+                except Exception:
+                    kde = gaussian_kde(x)
+                    y = kde(xs)
+            fig_d.add_trace(go.Scatter(
+                x=xs, y=y, mode="lines", fill="tozeroy", name=label
+            ))
+        fig_d.update_layout(title="Passenger Distance Density")
+        st.plotly_chart(fig_d, use_container_width=True)
+    else:
+        st.info("Not enough data for density plot.")
 
-    # Kepler country-level arcs
+    # 4) Kepler country‐level arcs
     cols = ["Origin Lat","Origin Lon","Dest Lat","Dest Lon"]
     if all(c in df.columns for c in cols):
         # centroids
@@ -215,8 +227,7 @@ with tab1:
             {"Origin Country Name":"Country","Origin Lat":"Lat","Origin Lon":"Lon"},axis=1)
         d = df[["Destination Country Name","Dest Lat","Dest Lon"]].rename(
             {"Destination Country Name":"Country","Dest Lat":"Lat","Dest Lon":"Lon"},axis=1)
-        cent = pd.concat([o,d],ignore_index=True)\
-                 .dropna(subset=["Lat","Lon"])\
+        cent = pd.concat([o,d],ignore_index=True).dropna(subset=["Lat","Lon"])\
                  .groupby("Country",as_index=False)[["Lat","Lon"]].mean()
 
         ab = df[["Origin Country Name","Destination Country Name",
@@ -228,48 +239,57 @@ with tab1:
 
         pa = (pa
               .merge(cent,left_on="A",right_on="Country").rename(
-                  {"Lat":"A Lat","Lon":"A Lon"},axis=1).drop("Country",1)
+                  {"Lat":"A Lat","Lon":"A Lon"},axis=1).drop("Country",axis=1)
               .merge(cent,left_on="B",right_on="Country").rename(
-                  {"Lat":"B Lat","Lon":"B Lon"},axis=1).drop("Country",1))
+                  {"Lat":"B Lat","Lon":"B Lon"},axis=1).drop("Country",axis=1))
 
         cfg = {
           "version":"v1","config":{
-            "visState":{"layers":[{ "id":"arc","type":"arc","config":{
-              "dataId":"pa","label":"Δ (%)",
-              "columns":{"lat0":"A Lat","lng0":"A Lon","lat1":"B Lat","lng1":"B Lon"},
-              "visConfig":{
-                "thickness":3,"opacity":0.8,
-                "colorField":{"name":"Δ (%)","type":"real"},
-                "colorScale":"quantile",
-                "colorRange":{"colors":["#ffffcc","#41b6c4","#253494"]},
-                "sizeField":"Δ (%)","sizeScale":10
-              }}}]},
-            "mapState":{"latitude":cent["Lat"].mean(),
-                        "longitude":cent["Lon"].mean(),
-                        "zoom":2.2,"pitch":30},
+            "visState":{"layers":[{
+              "id":"arc","type":"arc","config":{
+                "dataId":"pa","label":"Δ (%)",
+                "columns":{
+                  "lat0":"A Lat","lng0":"A Lon",
+                  "lat1":"B Lat","lng1":"B Lon"},
+                "visConfig":{
+                  "thickness":3,"opacity":0.8,
+                  "colorField":{"name":"Δ (%)","type":"real"},
+                  "colorScale":"quantile",
+                  "colorRange":{"colors":["#ffffcc","#41b6c4","#253494"]},
+                  "sizeField":"Δ (%)","sizeScale":10
+                }
+              }
+            }]},
+            "mapState":{
+              "latitude":cent["Lat"].mean(),
+              "longitude":cent["Lon"].mean(),
+              "zoom":2.2,"pitch":30
+            },
             "mapStyle":{}
           }
         }
 
-        km = KeplerGl(height=1600,data={"pa":pa},config=cfg)
+        km = KeplerGl(height=1600, data={"pa":pa}, config=cfg)
         html = km._repr_html_()
-        if isinstance(html,bytes): html=html.decode()
-        components.html(html,height=1400,width=1800)
+        if isinstance(html, bytes): html = html.decode()
+        components.html(html, height=1400, width=1800)
+    else:
+        st.info("Upload coords to see map.")
 
 with tab2:
     st.subheader("📊 Panel Regression")
     if "Year" not in df.columns:
         st.info("Add a 'Year' column for panel regression.")
     else:
-        dep = st.selectbox("Dependent var", df.select_dtypes(float).columns)
-        indep = st.multiselect("Independent vars",
-                               df.select_dtypes(float).columns.drop(dep))
-        fe_year = st.checkbox("Year fixed effects", value=True)
-        fe_unit = st.checkbox("OD-pair fixed effects", value=True)
+        dep   = st.selectbox("Dependent var",   df.select_dtypes(float).columns)
+        indep = st.multiselect("Independent vars", 
+                               df.select_dtypes(float).columns.drop(dep, errors="ignore"))
+        fe_y  = st.checkbox("Year fixed effects",      value=True)
+        fe_u  = st.checkbox("OD‐pair fixed effects",   value=True)
         if st.button("Run regression"):
             formula = f"{dep} ~ " + " + ".join(indep)
-            if fe_year: formula += " + C(Year)"
-            if fe_unit: formula += " + C(`OD Pair`)"
+            if fe_y: formula += " + C(Year)"
+            if fe_u: formula += " + C(`OD Pair`)"
             try:
                 res = smf.ols(formula, data=df).fit()
                 st.write(res.summary())
