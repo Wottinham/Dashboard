@@ -219,57 +219,55 @@ with tab1:
     st.markdown("---")
 
      # ─── Density via normal‐approximation ───────────────────────────────────────
-    # prepare before/after weighted samples
-    df_b = df[["Distance (km)", "Passengers"]].rename(
-        columns={"Distance (km)": "x", "Passengers": "w"}
-    )
-    df_a = df[["Distance (km)", "Passengers after policy"]].rename(
-        columns={"Distance (km)": "x", "Passengers after policy": "w"}
-    )
+    # prepare two scenarios
+df_b = df[["Distance (km)", "Passengers"]].rename(columns={"Distance (km)":"x","Passengers":"w"})
+df_a = df[["Distance (km)", "Passengers after policy"]].rename(columns={"Distance (km)":"x","Passengers after policy":"w"})
+scenarios = {"Before": df_b, "After": df_a}
 
-    scenarios = {
-        "Before": df_b,
-        "After":  df_a
-    }
-    fig3 = go.Figure()
+fig3 = go.Figure()
 
-    for name, sub in scenarios.items():
-        x_vals = sub["x"].to_numpy()
-        w_vals = sub["w"].to_numpy()
-        # skip if no weight
-        if np.nansum(w_vals) == 0:
-            continue
+for name, sub in scenarios.items():
+    x_vals = sub["x"].dropna().to_numpy()
+    w_vals = sub["w"].fillna(0).to_numpy()
 
-        # compute weighted mean & variance
-        mu = np.nan_to_num(np.average(x_vals, weights=w_vals), nan=0.0)
-        var = np.nan_to_num(np.average((x_vals - mu) ** 2, weights=w_vals), nan=0.0)
-        sigma = np.sqrt(var)
+    if len(x_vals)==0:
+        # nothing to plot
+        continue
 
-        # only plot if sigma is positive and finite
-        if not np.isfinite(sigma) or sigma <= 0:
-            continue
+    # if all weights zero, fall back to equal‐weight
+    if w_vals.sum() > 0:
+        mu    = np.average(x_vals, weights=w_vals)
+        var   = np.average((x_vals - mu) ** 2, weights=w_vals)
+    else:
+        mu    = x_vals.mean()
+        var   = x_vals.var()
 
-        # build smooth x‐axis over ±4σ
-        start, stop = mu - 4 * sigma, mu + 4 * sigma
-        xs = np.linspace(start, stop, 1000)
+    sigma = np.sqrt(var)
+    # fallback small bandwidth if zero or nan
+    if not np.isfinite(sigma) or sigma < 1e-3:
+        sigma = (x_vals.max() - x_vals.min()) / 20 or 1.0
 
-        # PDF scaled by total passenger count
-        ys = norm.pdf(xs, mu, sigma) * np.nansum(w_vals)
+    # build smooth grid ±4σ
+    xs = np.linspace(mu - 4 * sigma, mu + 4 * sigma, 500)
+    # scale pdf by total passengers (or by count if weights all zero)
+    scale = w_vals.sum() if w_vals.sum() > 0 else len(x_vals)
+    ys    = norm.pdf(xs, mu, sigma) * scale
 
-        fig3.add_trace(go.Scatter(
-            x=xs,
-            y=ys,
-            mode="lines",
-            fill="tozeroy",
-            name=name,
-        ))
+    fig3.add_trace(go.Scatter(
+        x=xs, y=ys,
+        mode="lines",
+        fill="tozeroy",
+        name=name
+    ))
 
-    fig3.update_layout(
-        title="Passenger Distance Distribution (Normal approx.)",
-        xaxis_title="Distance (km)",
-        yaxis_title="Approx. passenger‐km density"
-    )
-    st.plotly_chart(fig3, use_container_width=True)
+fig3.update_layout(
+    title="📊 Passenger Distance Density: Before vs After Policy",
+    xaxis_title="Distance (km)",
+    yaxis_title="Passenger count (approx)",
+    legend_title_text=""
+)
+
+st.plotly_chart(fig3, use_container_width=True)
 
     # ─── Kepler country‐level arcs ──────────────────────────────────────────────
     reqc = ["Origin Lat","Origin Lon","Dest Lat","Dest Lon"]
