@@ -8,3 +8,4 @@ streamlit-keplergl
 openpyxl
 statsmodels
 matplotlib
+scipy
