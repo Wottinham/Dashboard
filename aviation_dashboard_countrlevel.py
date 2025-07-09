@@ -217,12 +217,12 @@ with tab1:
     st.plotly_chart(fig2, use_container_width=True)
 
     st.markdown("---")
-
-     # ─── Density  ───────────────────────────────────────
-        # prepare two scenarios
-    # ─── Passenger Distance Density (scaled by passenger count) ────────────────
-
-# prepare two scenarios
+    
+         # ─── Density  ───────────────────────────────────────
+           # ─── Passenger Distance Density (data-driven KDE, scaled by passenger count) ────────────────
+    
+    
+    # prepare two scenarios
     df_b = df[["Distance (km)", "Passengers"]].rename(columns={"Distance (km)": "x", "Passengers": "w"})
     df_a = df[["Distance (km)", "Passengers after policy"]].rename(columns={"Distance (km)": "x", "Passengers after policy": "w"})
     scenarios = {"Before": df_b, "After": df_a}
@@ -233,27 +233,18 @@ with tab1:
         x_vals = sub["x"].dropna().to_numpy()
         w_vals = sub["w"].fillna(0).to_numpy()
     
-        if len(x_vals) == 0:
+        if len(x_vals) < 2 or w_vals.sum() <= 0:
             continue
     
-        # compute weighted mean & variance (if total weight > 0)
-        if w_vals.sum() > 0:
-            mu  = np.average(x_vals, weights=w_vals)
-            var = np.average((x_vals - mu) ** 2, weights=w_vals)
-        else:
-            mu  = x_vals.mean()
-            var = x_vals.var()
+        # build the weighted KDE
+        kde = gaussian_kde(dataset=x_vals, weights=w_vals)
     
-        sigma = np.sqrt(var)
-        if not np.isfinite(sigma) or sigma < 1e-3:
-            # fallback bandwidth
-            sigma = (x_vals.max() - x_vals.min()) / 20 or 1.0
+        # define evaluation grid across the support of the data
+        xmin, xmax = x_vals.min(), x_vals.max()
+        xs = np.linspace(xmin, xmax, 500)
     
-        # build smooth grid ±4σ
-        xs = np.linspace(mu - 4 * sigma, mu + 4 * sigma, 500)
-        # **scale by total passengers**
-        scale = w_vals.sum()  # total passenger count
-        ys    = norm.pdf(xs, mu, sigma) * scale
+        # evaluate and scale by total passenger count
+        ys = kde(xs) * w_vals.sum()
     
         fig3.add_trace(go.Scatter(
             x=xs,
@@ -264,13 +255,14 @@ with tab1:
         ))
     
     fig3.update_layout(
-        title="📊 Passenger Distance Density (scaled by passenger count)",
+        title="📊 Passenger Distance Density (KDE, scaled by passenger count)",
         xaxis_title="Distance (km)",
-        yaxis_title="Passenger count (approx)",
-        legend_title_text=""
+        yaxis_title="Passenger count",
+        legend_title_text="Scenario"
     )
     
     st.plotly_chart(fig3, use_container_width=True)
+
 
 
     # ─── Kepler country‐level arcs ──────────────────────────────────────────────
