@@ -2,9 +2,10 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import plotly.graph_objects as go
 from keplergl import KeplerGl
 import streamlit.components.v1 as components
-import matplotlib.pyplot as plt
+from scipy.stats import norm
 import statsmodels.formula.api as smf
 
 # ----------------------
@@ -43,7 +44,7 @@ st.set_page_config(page_title="Airport-Pair Simulator", layout="wide")
 st.title("✈️ JETPAS - Joint Economic & Transport Policy Aviation Simulator")
 st.markdown("Simulate air travel between airports and policy impacts.")
 
-# Create tabs
+# Create two top‐level tabs
 tab1, tab2 = st.tabs(["Simulator", "Regression"])
 
 # ----------------------------------------
@@ -60,6 +61,7 @@ else:
     df = load_dummy_data()
     st.sidebar.info("🛈 No passenger CSV – using **dummy data**.")
 
+# Validate passenger columns
 required_cols = {
     "Origin Country Name", "Destination Country Name",
     "Origin Airport",        "Destination Airport",
@@ -71,8 +73,6 @@ if not required_cols.issubset(df.columns):
     st.stop()
 
 df = df.dropna(subset=required_cols).reset_index(drop=True)
-
-# Now we can define origin_all and dest_all once
 origin_all = sorted(df["Origin Country Name"].unique())
 dest_all   = sorted(df["Destination Country Name"].unique())
 
@@ -80,7 +80,6 @@ dest_all   = sorted(df["Destination Country Name"].unique())
 # Sidebar – policy inputs
 # ----------------------------------------
 with st.sidebar:
-    # Carbon pricing
     enable_carbon = st.checkbox("Enable carbon pricing?", key="chk_carbon")
     if enable_carbon:
         ets_price = st.slider("Carbon price (EUR / tCO₂)", 0, 400, 100, 5, key="slider_ets")
@@ -95,7 +94,6 @@ with st.sidebar:
         carbon_origin_countries = []
         carbon_dest_countries = []
 
-    # Passenger tax
     enable_tax = st.checkbox("Enable air passenger tax?", key="chk_tax")
     if enable_tax:
         air_passenger_tax = st.slider("Air Passenger Tax (USD)", 0, 100, 10, 1, key="slider_tax")
@@ -147,7 +145,6 @@ with st.sidebar:
 # ----------------------------------------
 df["CO2 per pax (kg)"] = df["Distance (km)"] * emission_factor
 
-# Carbon cost
 df["Carbon cost per pax"] = 0.0
 if enable_carbon:
     mask_c = (
@@ -156,7 +153,6 @@ if enable_carbon:
     )
     df.loc[mask_c, "Carbon cost per pax"] = (df.loc[mask_c, "CO2 per pax (kg)"] / 1e3) * ets_price * pass_through
 
-# Passenger tax
 df["Air passenger tax per pax"] = 0.0
 if enable_tax:
     mask_t = (
@@ -165,11 +161,9 @@ if enable_tax:
     )
     df.loc[mask_t, "Air passenger tax per pax"] = air_passenger_tax * pass_through
 
-# New fare & % change
 df["New Avg Fare"] = df["Avg. Total Fare(USD)"] + df["Carbon cost per pax"] + df["Air passenger tax per pax"]
 df["Fare Δ (%)"]    = (df["New Avg Fare"] / df["Avg. Total Fare(USD)"] - 1) * 100
 
-# Elasticity & GDP factor
 fare_factor = (df["New Avg Fare"] / df["Avg. Total Fare(USD)"]).replace([np.inf, -np.inf], np.nan) ** user_price_elast
 df["GDP Growth (%)"]    = df["Origin Country Name"].map(gdp_growth_by_country).fillna(global_gdp_growth)
 df["GDP Growth Factor"] = (1 + df["GDP Growth (%)"]/100) ** user_gdp_elast
@@ -222,7 +216,8 @@ with tab1:
         "Passengers after policy": "sum"
     })
     origin_summary["Relative Change (%)"] = (
-        origin_summary["Passengers after policy"] / origin_summary["Passengers"] - 1
+        origin_summary["Passengers after policy"] /
+        origin_summary["Passengers"] - 1
     ) * 100
 
     fig1 = px.bar(
@@ -233,7 +228,6 @@ with tab1:
     fig1.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
     st.plotly_chart(fig1, use_container_width=True)
 
-    # KPIs
     col1, col2 = st.columns(2)
     with col1:
         base = df["Passengers"].sum()
@@ -254,16 +248,37 @@ with tab1:
     fig2.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
     st.plotly_chart(fig2, use_container_width=True)
 
-    # 3) Smoothed density curves
+    # 3) Passenger Distance Density via Plotly + SciPy
     st.subheader("📊 Passenger Distance Density Curves")
-    fig, ax = plt.subplots(figsize=(7,7))
-    df["Distance (km)"].plot.density(ax=ax, linewidth=4, label="Before")
-    df["Distance (km)"].plot.density(ax=ax, linewidth=4, label="After")
-    ax.set_xlabel("Distance (km)")
-    ax.legend()
-    st.pyplot(fig)
+    # Compute weighted mean & sigma
+    dist = df["Distance (km)"].to_numpy()
+    w_b  = df["Passengers"].to_numpy()
+    w_a  = df["Passengers after policy"].to_numpy()
+    mu_b = np.average(dist, weights=w_b)
+    sig_b= np.sqrt(np.average((dist-mu_b)**2, weights=w_b))
+    mu_a = np.average(dist, weights=w_a)
+    sig_a= np.sqrt(np.average((dist-mu_a)**2, weights=w_a))
+    x_min = min(mu_b-4*sig_b, mu_a-4*sig_a)
+    x_max = max(mu_b+4*sig_b, mu_a+4*sig_a)
+    x     = np.arange(x_min, x_max, (x_max-x_min)/1000)
+    y_b   = norm.pdf(x, mu_b, sig_b)
+    y_a   = norm.pdf(x, mu_a, sig_a)
 
-    # 4) Kepler map (country-level arcs)
+    fig_density = go.Figure()
+    fig_density.add_trace(go.Scatter(
+        x=x, y=y_b, mode='lines', fill='tozeroy', name='Before'
+    ))
+    fig_density.add_trace(go.Scatter(
+        x=x, y=y_a, mode='lines', fill='tozeroy', name='After'
+    ))
+    fig_density.update_layout(
+        title="📊 Passenger Distance Density: Before vs After",
+        xaxis_title="Distance (km)",
+        yaxis_title="Density"
+    )
+    st.plotly_chart(fig_density, use_container_width=True)
+
+    # 4) Kepler map (country‐level arcs)
     required = ["Origin Lat","Origin Lon","Dest Lat","Dest Lon"]
     if all(c in df.columns for c in required):
         co = df[["Origin Country Name","Origin Lat","Origin Lon"]].rename(
@@ -287,7 +302,7 @@ with tab1:
             ab["Origin Country Name"] < ab["Destination Country Name"],
             ab["Destination Country Name"], ab["Origin Country Name"]
         )
-        pa = ab.groupby(["A","B"],as_index=False).agg(
+        pa = ab.groupby(["A","B"], as_index=False).agg(
             {"Passengers":"sum","Passengers after policy":"sum"}
         )
         pa["Traffic Δ (%)"] = (pa["Passengers after policy"]/pa["Passengers"] - 1)*100
