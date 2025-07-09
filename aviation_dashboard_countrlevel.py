@@ -332,7 +332,7 @@ with tab1:
           }
         }
 
-        km = KeplerGl(height=1600, data={"pairs":pa}, config=cfg)
+        km = KeplerGl(height=1200, data={"pairs":pa}, config=cfg)
         raw = km._repr_html_()
         if isinstance(raw, bytes): raw = raw.decode("utf-8")
         components.html(raw, height=1200, width=1800, scrolling=True)
