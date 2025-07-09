@@ -7,3 +7,4 @@ keplergl
 streamlit-keplergl
 openpyxl
 statsmodels
+matplotlib
