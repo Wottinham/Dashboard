@@ -4,9 +4,9 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from scipy.stats import gaussian_kde
-import statsmodels.formula.api as smf
 from keplergl import KeplerGl
 import streamlit.components.v1 as components
+import statsmodels.formula.api as smf
 
 # ----------------------
 # Model configuration (defaults)
@@ -15,7 +15,7 @@ PRICE_ELASTICITY_DEMAND = -0.8
 GDP_ELASTICITY_DEMAND   = 1.4
 
 # ----------------------
-# Helper – dummy data
+# Helper – generate dummy data when no CSV is provided
 # ----------------------
 def load_dummy_data() -> pd.DataFrame:
     rng = np.random.default_rng(seed=42)
@@ -24,9 +24,9 @@ def load_dummy_data() -> pd.DataFrame:
     rows = []
     for o in origins:
         for d in dests:
-            if o == d: continue
+            if o == d:
+                continue
             rows.append({
-                "Year":                   2022,
                 "Origin Country Name":      o,
                 "Destination Country Name": d,
                 "Origin Airport":           f"{o[:3].upper()}-INTL",
@@ -38,260 +38,346 @@ def load_dummy_data() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 # ----------------------
-# UI setup
+# Streamlit UI setup
 # ----------------------
 st.set_page_config(page_title="Airport-Pair Simulator", layout="wide")
-st.title("✈️ JETPAS – Aviation Simulator")
+st.title("✈️ JETPAS - Joint Economic & Transport Policy Aviation Simulator")
 st.markdown("Simulate air travel between airports and policy impacts.")
 
-# Sidebar uploads
+# Sidebar – uploads
 st.sidebar.header("📈 Policy & Data Inputs")
-uploaded_file = st.sidebar.file_uploader("Passenger CSV", type=["csv"])
-coord_file    = st.sidebar.file_uploader("Coords (.xlsx)", type=["xlsx"])
+uploaded_file = st.sidebar.file_uploader(
+    "Upload airport-pair passenger CSV", type=["csv"], key="upload_csv"
+)
+coord_file = st.sidebar.file_uploader(
+    "Upload airport coordinates (.xlsx)", type=["xlsx"], key="upload_coords"
+)
 
 # ----------------------
-# Load & validate data
+# Load passenger data
 # ----------------------
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
-    st.sidebar.success("Passenger CSV loaded.")
+    st.success("✅ Passenger CSV loaded.")
 else:
     df = load_dummy_data()
-    st.sidebar.info("Using dummy data.")
+    st.info("🛈 No passenger CSV – using **dummy data**.")
 
+# Validate passenger columns
 required_cols = {
-    "Origin Country Name","Destination Country Name",
-    "Origin Airport","Destination Airport",
-    "Distance (km)","Passengers","Avg. Total Fare(USD)"
+    "Origin Country Name", "Destination Country Name",
+    "Origin Airport",        "Destination Airport",
+    "Distance (km)",         "Passengers",
+    "Avg. Total Fare(USD)"
 }
 if not required_cols.issubset(df.columns):
-    st.error("Passenger CSV missing required columns."); st.stop()
+    st.error("Passenger CSV missing required columns.")
+    st.stop()
 
 df = df.dropna(subset=required_cols).reset_index(drop=True)
-
-# ----------------------
-# Common UI inputs
-# ----------------------
 origin_all = sorted(df["Origin Country Name"].unique())
 dest_all   = sorted(df["Destination Country Name"].unique())
 
-enable_carbon = st.sidebar.checkbox("Enable carbon pricing?")
+# ----------------------
+# Carbon pricing policy
+# ----------------------
+enable_carbon = st.sidebar.checkbox("Enable carbon pricing?", key="chk_carbon")
 if enable_carbon:
-    ets_price = st.sidebar.slider("Carbon price (EUR/tCO₂)", 0, 400, 100, 5)
-    carbon_orig = st.sidebar.multiselect("Carbon: origin countries", origin_all, default=origin_all)
-    carbon_dest = st.sidebar.multiselect("Carbon: dest countries",   dest_all,   default=dest_all)
+    ets_price = st.sidebar.slider(
+        "Carbon price (EUR / tCO₂)", 0, 400, 100, 5, key="slider_ets"
+    )
+    carbon_origin_countries = st.sidebar.multiselect(
+        "Origin countries taxed (carbon):",
+        origin_all, default=origin_all, key="mslt_carbon_orig"
+    )
+    carbon_dest_countries = st.sidebar.multiselect(
+        "Destination countries taxed (carbon):",
+        dest_all, default=dest_all, key="mslt_carbon_dest"
+    )
 else:
-    ets_price = 0.0; carbon_orig = []; carbon_dest = []
+    ets_price = 0.0
+    carbon_origin_countries = []
+    carbon_dest_countries = []
 
-enable_tax = st.sidebar.checkbox("Enable air passenger tax?")
+# ----------------------
+# Air passenger tax policy
+# ----------------------
+enable_tax = st.sidebar.checkbox("Enable air passenger tax?", key="chk_tax")
 if enable_tax:
-    air_tax = st.sidebar.slider("Air Passenger Tax (USD)", 0, 100, 10, 1)
-    tax_orig = st.sidebar.multiselect("Tax: origin countries", origin_all, default=origin_all)
-    tax_dest = st.sidebar.multiselect("Tax: dest countries",   dest_all,   default=dest_all)
+    air_passenger_tax = st.sidebar.slider(
+        "Air Passenger Tax (USD)", 0, 100, 10, 1, key="slider_tax"
+    )
+    tax_origin_countries = st.sidebar.multiselect(
+        "Origin countries taxed (tax):",
+        origin_all, default=origin_all, key="mslt_tax_orig"
+    )
+    tax_dest_countries = st.sidebar.multiselect(
+        "Destination countries taxed (tax):",
+        dest_all, default=dest_all, key="mslt_tax_dest"
+    )
 else:
-    air_tax = 0.0; tax_orig = []; tax_dest = []
+    air_passenger_tax = 0.0
+    tax_origin_countries = []
+    tax_dest_countries = []
 
+# ----------------------
+# Parameters
+# ----------------------
 st.sidebar.markdown("### Parameters")
-pass_through     = st.sidebar.slider("Cost pass-through (%)", 0, 100, 80, 5) / 100
-emission_factor  = st.sidebar.slider("Emission factor (kgCO₂/pax-km)", 0.0, 1.0, 0.115, 0.001)
+pass_through = st.sidebar.slider(
+    "Cost pass-through to fares (%)", 0, 100, 80, 5,
+    help="Share of carbon cost and ticket tax airlines embed in ticket prices.",
+    key="slider_pass_through"
+) / 100
 
-# GDP & elasticity
-gdp_global      = st.sidebar.slider("Global GDP growth (%)", -5.0, 8.0, 2.5, 0.1)
-price_elast     = st.sidebar.slider("Price elasticity", -2.0, -0.1, PRICE_ELASTICITY_DEMAND, 0.1)
-gdp_elast       = st.sidebar.slider("GDP elasticity",     0.5,   2.0, GDP_ELASTICITY_DEMAND,   0.1)
+emission_factor = st.sidebar.slider(
+    "Emission factor (kg CO₂ per pax-km)",
+    0.0, 1.0, 0.115, 0.001,
+    help="kg of CO₂ emitted per passenger-km flown.",
+    key="slider_emission_factor"
+)
 
-st.sidebar.markdown("### Optional: Country-specific GDP growth")
-gdp_by_country = {}
-with st.sidebar.expander("Customize GDP by origin"):
-    for c in origin_all:
-        gdp_by_country[c] = st.slider(f"{c} GDP (%)", -5.0, 8.0, gdp_global, 0.1)
+# ----------------------
+# Economic inputs
+# ----------------------
+global_gdp_growth = st.sidebar.slider(
+    "Global real GDP growth (%)", -5.0, 8.0, 2.5, 0.1,
+    key="slider_gdp_global"
+)
+user_price_elasticity = st.sidebar.slider(
+    "Demand price elasticity (negative)",
+    -2.0, -0.1, PRICE_ELASTICITY_DEMAND, 0.1,
+    key="slider_price_elast"
+)
+user_gdp_elasticity = st.sidebar.slider(
+    "Demand GDP elasticity", 0.5, 2.0, GDP_ELASTICITY_DEMAND, 0.1,
+    key="slider_gdp_elast"
+)
 
-# OD‐pair column for regression
-df["OD Pair"] = df["Origin Airport"] + "–" + df["Destination Airport"]
+st.sidebar.markdown("### Optional: Adjust GDP Growth by Country")
+gdp_growth_by_country = {}
+with st.sidebar.expander("Customize GDP Growth for Specific Origins"):
+    for country in origin_all:
+        gdp_growth_by_country[country] = st.slider(
+            f"{country} GDP growth (%)",
+            -5.0, 8.0, global_gdp_growth, 0.1,
+            key=f"gdp_{country}"
+        )
 
 # ----------------------
 # Policy calculations
 # ----------------------
 df["CO2 per pax (kg)"] = df["Distance (km)"] * emission_factor
 
-# carbon cost
+# Carbon cost
 df["Carbon cost per pax"] = 0.0
 if enable_carbon:
-    mask = df["Origin Country Name"].isin(carbon_orig) & df["Destination Country Name"].isin(carbon_dest)
-    df.loc[mask, "Carbon cost per pax"] = df.loc[mask, "CO2 per pax (kg)"] / 1000 * ets_price * pass_through
+    mask_c = (
+        df["Origin Country Name"].isin(carbon_origin_countries) &
+        df["Destination Country Name"].isin(carbon_dest_countries)
+    )
+    df.loc[mask_c, "Carbon cost per pax"] = (
+        df.loc[mask_c, "CO2 per pax (kg)"] / 1_000
+        * ets_price * pass_through
+    )
 
-# ticket tax
-df["Ticket tax per pax"] = 0.0
+# Passenger tax
+df["Air passenger tax per pax"] = 0.0
 if enable_tax:
-    mask = df["Origin Country Name"].isin(tax_orig) & df["Destination Country Name"].isin(tax_dest)
-    df.loc[mask, "Ticket tax per pax"] = air_tax * pass_through
+    mask_t = (
+        df["Origin Country Name"].isin(tax_origin_countries) &
+        df["Destination Country Name"].isin(tax_dest_countries)
+    )
+    df.loc[mask_t, "Air passenger tax per pax"] = air_passenger_tax * pass_through
 
-# new fare & %Δ
-df["New Avg Fare"] = df["Avg. Total Fare(USD)"] + df["Carbon cost per pax"] + df["Ticket tax per pax"]
-df["Fare Δ (%)"] = (df["New Avg Fare"] / df["Avg. Total Fare(USD)"] - 1) * 100
+# New fare & fare Δ
+df["New Avg Fare"] = (
+    df["Avg. Total Fare(USD)"]
+    + df["Carbon cost per pax"]
+    + df["Air passenger tax per pax"]
+)
+df["Fare Δ (%)"] = (
+    df["New Avg Fare"] / df["Avg. Total Fare(USD)"] - 1
+) * 100
 
-# elasticity & GDP growth
-df["GDP Growth (%)"] = df["Origin Country Name"].map(gdp_by_country).fillna(gdp_global)
-df["GDP Factor"]    = (1 + df["GDP Growth (%)"] / 100) ** gdp_elast
-df["Fare Factor"]   = (df["New Avg Fare"] / df["Avg. Total Fare(USD)"])**price_elast
+# Elasticity & GDP adjustments
+fare_factor = (
+    (df["New Avg Fare"] / df["Avg. Total Fare(USD)"])
+    .replace([np.inf, -np.inf], np.nan) ** user_price_elasticity
+)
+df["GDP Growth (%)"] = (
+    df["Origin Country Name"]
+    .map(gdp_growth_by_country)
+    .fillna(global_gdp_growth)
+)
+df["GDP Growth Factor"] = (1 + df["GDP Growth (%)"] / 100) ** user_gdp_elasticity
 
-df["Passengers after policy"] = df["Passengers"] * df["Fare Factor"] * df["GDP Factor"]
-df["Passenger Δ (%)"]         = (df["Passengers after policy"] / df["Passengers"] - 1) * 100
+df["Passengers after policy"] = (
+    df["Passengers"] * fare_factor * df["GDP Growth Factor"]
+)
+df["Passenger Δ (%)"] = (
+    df["Passengers after policy"] / df["Passengers"] - 1
+) * 100
 
-# init coords
-df["Origin Lat"]=df["Origin Lon"]=df["Dest Lat"]=df["Dest Lon"]=np.nan
+# Initialize coords
+for col in ["Origin Lat","Origin Lon","Dest Lat","Dest Lon"]:
+    df[col] = np.nan
 
 # ----------------------
-# Load & merge coords
+# Load & merge coordinates
 # ----------------------
 if coord_file:
     try:
-        coords = pd.read_excel(coord_file, engine="openpyxl").drop_duplicates("IATA_Code")
-        if {"IATA_Code","DecLat","DecLon"}.issubset(coords.columns):
-            cmap = coords.set_index("IATA_Code")[["DecLat","DecLon"]]
+        coords_df = pd.read_excel(coord_file, engine="openpyxl")
+        coords_df = coords_df.drop_duplicates(subset=["IATA_Code"])
+        if {"IATA_Code","DecLat","DecLon"}.issubset(coords_df.columns):
+            coords_map = coords_df.set_index("IATA_Code")[["DecLat","DecLon"]]
             df["Origin Code"] = df["Origin Airport"].str.partition("-")[0]
             df["Dest Code"]   = df["Destination Airport"].str.partition("-")[0]
-            df["Origin Lat"]  = df["Origin Code"].map(cmap["DecLat"])
-            df["Origin Lon"]  = df["Origin Code"].map(cmap["DecLon"])
-            df["Dest Lat"]    = df["Dest Code"].map(cmap["DecLat"])
-            df["Dest Lon"]    = df["Dest Code"].map(cmap["DecLon"])
+            df["Origin Lat"]  = df["Origin Code"].map(coords_map["DecLat"])
+            df["Origin Lon"]  = df["Origin Code"].map(coords_map["DecLon"])
+            df["Dest Lat"]    = df["Dest Code"].map(coords_map["DecLat"])
+            df["Dest Lon"]    = df["Dest Code"].map(coords_map["DecLon"])
         else:
-            st.sidebar.warning("Coords need IATA_Code / DecLat / DecLon")
+            st.warning("❌ Coordinate file missing IATA_Code / DecLat / DecLon.")
+    except ImportError:
+        st.warning("❌ Install 'openpyxl' to read .xlsx files: `pip install openpyxl`.")
     except Exception as e:
-        st.sidebar.warning(f"Failed to process coords: {e}")
+        st.warning(f"❌ Failed to process coordinate file: {e}")
 
 # ----------------------
-# Tabs
+# Main Tabs
 # ----------------------
 tab1, tab2 = st.tabs(["Simulation","Regression"])
 
+# ------ Simulation Tab ------
 with tab1:
-    st.subheader("📊 Simulation Results")
-    st.dataframe(df[[
-        "Origin Airport","Destination Airport","Distance (km)","Passengers",
-        "CO2 per pax (kg)","Avg. Total Fare(USD)",
-        "Carbon cost per pax","Ticket tax per pax",
-        "New Avg Fare","Passenger Δ (%)"
-    ]], use_container_width=True)
-
-    # 1) Passenger Δ bar
-    or_sum = df.groupby("Origin Country Name",as_index=False).agg(
-        Passengers=("Passengers","sum"),
-        After=("Passengers after policy","sum")
+    st.subheader("📊 Airport-Pair Passenger Results")
+    st.dataframe(
+        df[[
+            "Origin Airport","Destination Airport","Passengers",
+            "Distance (km)","CO2 per pax (kg)",
+            "Avg. Total Fare(USD)","Carbon cost per pax",
+            "Air passenger tax per pax","New Avg Fare",
+            "Passenger Δ (%)"
+        ]], use_container_width=True
     )
-    or_sum["Δ (%)"] = (or_sum["After"]/or_sum["Passengers"]-1)*100
-    fig1 = px.bar(or_sum, "Origin Country Name","Δ (%)",
-                  title="Δ Passenger Vol. by Origin")
-    st.plotly_chart(fig1, use_container_width=True)
 
-    # 2) Fare Δ bar
-    pr_sum = df.groupby("Origin Country Name",as_index=False)["Fare Δ (%)"].mean()
-    fig2 = px.bar(pr_sum, "Origin Country Name","Fare Δ (%)",
-                  title="Δ Avg Fare by Origin")
-    st.plotly_chart(fig2, use_container_width=True)
+    # Barplot: passenger Δ
+    origin_summary = df.groupby("Origin Country Name", as_index=False).agg({
+        "Passengers":"sum","People after policy":"sum"
+    })
+    origin_summary["Relative Change (%)"] = (
+        origin_summary["Passengers after policy"]/origin_summary["Passengers"] - 1
+    )*100
+    fig1 = px.bar(
+        origin_summary,x="Origin Country Name",y="Relative Change (%)",
+        title="📉 Relative Change in Passenger Volume by Origin Country",
+        text="Relative Change (%)"
+    )
+    fig1.update_traces(texttemplate="%{text:.1f}%",textposition="outside")
+    st.plotly_chart(fig1,use_container_width=True)
 
-    # 3) **Smoothed density** curves
-    # prepare combined x-grid
+    # Barplot: fare Δ
+    price_summary = df.groupby("Origin Country Name", as_index=False)["Fare Δ (%)"].mean()
+    fig2 = px.bar(
+        price_summary, x="Origin Country Name", y="Fare Δ (%)",
+        title="📈 Relative Change in Average Fare by Origin Country",
+        text="Fare Δ (%)"
+    )
+    fig2.update_traces(texttemplate="%{text:.1f}%",textposition="outside")
+    st.plotly_chart(fig2,use_container_width=True)
+
+    # Density plot inside Simulation
+    st.markdown("### Passenger Distance Density")
     all_dist = df["Distance (km)"].dropna()
-    if len(all_dist)>1:
-        xs = np.linspace(all_dist.min(), all_dist.max(), 200)
+    if all_dist.size > 1:
+        xs = np.linspace(all_dist.min(),all_dist.max(),200)
         fig_d = go.Figure()
-        for label, subdf in [("Before", df[["Distance (km)","Passengers"]].rename(columns={"Passengers":"Cnt","Distance (km)":"Dist"})),
-                              ("After",  df[["Distance (km)","Passengers after policy"]]
-                                           .rename(columns={"Passengers after policy":"Cnt","Distance (km)":"Dist"}))]:
-            x = subdf["Dist"].to_numpy()
-            w = subdf["Cnt"].to_numpy()
-            # guard zero‐weight or no variance
-            if w.sum() <= 0 or np.nanstd(x) == 0:
+        for label,(dist_col,weight_col) in [
+                ("Before",("Distance (km)","Passengers")),
+                ("After", ("Distance (km)","Passengers after policy"))
+            ]:
+            x = df[dist_col].to_numpy()
+            w = df[weight_col].to_numpy()
+            if w.sum()<=0 or np.nanstd(x)==0:
                 y = np.zeros_like(xs)
             else:
                 try:
-                    kde = gaussian_kde(x, weights=w)
-                    y = kde(xs)
+                    kde = gaussian_kde(x,weights=w)
                 except Exception:
                     kde = gaussian_kde(x)
-                    y = kde(xs)
+                y = kde(xs)
             fig_d.add_trace(go.Scatter(
-                x=xs, y=y, mode="lines", fill="tozeroy", name=label
+                x=xs,y=y,mode='lines',fill='tozeroy',name=label
             ))
-        fig_d.update_layout(title="Passenger Distance Density")
-        st.plotly_chart(fig_d, use_container_width=True)
+        fig_d.update_layout(
+            xaxis_title="Distance (km)", yaxis_title="Density (scaled by total pax)", height=400
+        )
+        st.plotly_chart(fig_d,use_container_width=True)
     else:
-        st.info("Not enough data for density plot.")
+        st.info("Not enough distance data to draw density.")
 
-    # 4) Kepler country‐level arcs
-    cols = ["Origin Lat","Origin Lon","Dest Lat","Dest Lon"]
-    if all(c in df.columns for c in cols):
-        # centroids
-        o = df[["Origin Country Name","Origin Lat","Origin Lon"]].rename(
-            {"Origin Country Name":"Country","Origin Lat":"Lat","Origin Lon":"Lon"},axis=1)
-        d = df[["Destination Country Name","Dest Lat","Dest Lon"]].rename(
-            {"Destination Country Name":"Country","Dest Lat":"Lat","Dest Lon":"Lon"},axis=1)
-        cent = pd.concat([o,d],ignore_index=True).dropna(subset=["Lat","Lon"])\
-                 .groupby("Country",as_index=False)[["Lat","Lon"]].mean()
+    # Kepler map
+    req = ["Origin Lat","Origin Lon","Dest Lat","Dest Lon"]
+    if all(c in df.columns for c in req):
+        coords_o = df[["Origin Country Name","Origin Lat","Origin Lon"]]
+        coords_o.columns = ["Country","Lat","Lon"]
+        coords_d = df[["Destination Country Name","Dest Lat","Dest Lon"]]
+        coords_d.columns = ["Country","Lat","Lon"]
+        cents = pd.concat([coords_o,coords_d]).dropna().groupby("Country",as_index=False)[["Lat","Lon"]].mean()
 
-        ab = df[["Origin Country Name","Destination Country Name",
-                  "Passengers","Passengers after policy"]].copy()
-        ab["A"] = np.minimum(ab["Origin Country Name"],ab["Destination Country Name"])
-        ab["B"] = np.maximum(ab["Origin Country Name"],ab["Destination Country Name"])
-        pa = ab.groupby(["A","B"],as_index=False).sum()
-        pa["Δ (%)"] = (pa["Passengers after policy"]/pa["Passengers"]-1)*100
+        ab = df[["Origin Country Name","Destination Country Name","Passengers","Passengers after policy"]]
+        ab["A"] = np.where(ab["Origin Country Name"]<ab["Destination Country Name"],ab["Origin Country Name"],ab["Destination Country Name"])
+        ab["B"] = np.where(ab["Origin Country Name"]<ab["Destination Country Name"],ab["Destination Country Name"],ab["Origin Country Name"])
+        pair = ab.groupby(["A","B"],as_index=False).sum()
+        pair["Traffic Δ (%)"] = (pair["Passengers after policy"]/pair["Passengers"]-1)*100
+        pair = pair.merge(cents,left_on="A",right_on="Country").rename(columns={"Lat":"A Lat","Lon":"A Lon"}).drop(columns=["Country"])
+        pair = pair.merge(cents,left_on="B",right_on="Country").rename(columns={"Lat":"B Lat","Lon":"B Lon"}).drop(columns=["Country"])
 
-        pa = (pa
-              .merge(cent,left_on="A",right_on="Country").rename(
-                  {"Lat":"A Lat","Lon":"A Lon"},axis=1).drop("Country",axis=1)
-              .merge(cent,left_on="B",right_on="Country").rename(
-                  {"Lat":"B Lat","Lon":"B Lon"},axis=1).drop("Country",axis=1))
-
-        cfg = {
-          "version":"v1","config":{
-            "visState":{"layers":[{
-              "id":"arc","type":"arc","config":{
-                "dataId":"pa","label":"Δ (%)",
-                "columns":{
-                  "lat0":"A Lat","lng0":"A Lon",
-                  "lat1":"B Lat","lng1":"B Lon"},
-                "visConfig":{
-                  "thickness":3,"opacity":0.8,
-                  "colorField":{"name":"Δ (%)","type":"real"},
-                  "colorScale":"quantile",
-                  "colorRange":{"colors":["#ffffcc","#41b6c4","#253494"]},
-                  "sizeField":"Δ (%)","sizeScale":10
-                }
-              }
-            }]},
-            "mapState":{
-              "latitude":cent["Lat"].mean(),
-              "longitude":cent["Lon"].mean(),
-              "zoom":2.2,"pitch":30
-            },
-            "mapStyle":{}
-          }
-        }
-
-        km = KeplerGl(height=1600, data={"pa":pa}, config=cfg)
-        html = km._repr_html_()
-        if isinstance(html, bytes): html = html.decode()
-        components.html(html, height=1400, width=1800)
+        cfg = {"version":"v1","config":{"visState":{"filters":[],"layers":[{  
+                    "id":"arc_layer","type":"arc","config":{  
+                        "dataId":"pairs","label":"Traffic Δ (%)","columns":{"lat0":"A Lat","lng0":"A Lon","lat1":"B Lat","lng1":"B Lon"},
+                        "isVisible":True,"visConfig":{"thickness":3,"opacity":0.8,
+                            "colorField":{"name":"Traffic Δ (%)","type":"real"},
+                            "colorScale":"quantile","colorRange":{"name":"Global Warming","type":"sequential","category":"Uber","colors":["#ffffcc","#a1dab4","#41b6c4","#2c7fb8","#253494"]},
+                            "sizeField":"Traffic Δ (%)","sizeScale":10
+                        }
+                    }}],"interactionConfig":{"tooltip":{"fieldsToShow":{"pairs":["A","B","Traffic Δ (%)"]},"enabled":True}}},
+                "mapState":{"latitude":cents["Lat"].mean(),"longitude":cents["Lon"].mean(),"zoom":2.2,"pitch":30},"mapStyle":{}}}
+        
+        kmap = KeplerGl(height=1600,data={"pairs":pair},config=cfg)
+        html = kmap._repr_html_()
+        if isinstance(html,bytes): html = html.decode('utf-8')
+        components.html(html,width=1800,height=1200)
     else:
-        st.info("Upload coords to see map.")
+        st.warning("Upload coordinates with 'Origin Lat','Origin Lon','Dest Lat','Dest Lon' to see map.")
 
+# ------ Regression Tab ------
 with tab2:
-    st.subheader("📊 Panel Regression")
-    if "Year" not in df.columns:
-        st.info("Add a 'Year' column for panel regression.")
-    else:
-        dep   = st.selectbox("Dependent var",   df.select_dtypes(float).columns)
-        indep = st.multiselect("Independent vars", 
-                               df.select_dtypes(float).columns.drop(dep, errors="ignore"))
-        fe_y  = st.checkbox("Year fixed effects",      value=True)
-        fe_u  = st.checkbox("OD‐pair fixed effects",   value=True)
+    st.subheader("📊 Panel Regression Analysis")
+    if 'Year' in df.columns:
+        st.write("Detected panel data (Year present). Choose regression settings below.")
+        dep = st.selectbox("Dependent variable", [c for c in df.select_dtypes(include=[float,int]).columns])
+        indep = st.multiselect("Independent variables", [c for c in df.select_dtypes(include=[float,int]).columns if c!=dep])
+        col1, col2 = st.columns(2)
+        with col1:
+            fe_time = st.checkbox("Include Year fixed effects", value=True)
+            fe_unit = st.checkbox("Include OD_Pair fixed effects", value=True)
+        # create OD pair identifier
+        if 'OD_Pair' not in df.columns and 'Origin Airport' in df.columns:
+            df['OD_Pair'] = df['Origin Airport'] + '_' + df['Destination Airport']
         if st.button("Run regression"):
-            formula = f"{dep} ~ " + " + ".join(indep)
-            if fe_y: formula += " + C(Year)"
-            if fe_u: formula += " + C(`OD Pair`)"
-            try:
-                res = smf.ols(formula, data=df).fit()
-                st.write(res.summary())
-            except Exception as e:
-                st.error(f"Regression failed: {e}")
+            if not dep or not indep:
+                st.error("Select both dependent and at least one independent variable.")
+            else:
+                formula = f"{dep} ~ {' + '.join(indep)}"
+                if fe_time: formula += ' + C(Year)'
+                if fe_unit: formula += ' + C(OD_Pair)'
+                try:
+                    model = smf.ols(formula, data=df).fit()
+                    st.write(model.summary())
+                except Exception as e:
+                    st.error(f"Regression failed: {e}")
+    else:
+        st.info("Upload panel data with a 'Year' column to enable regression analysis.")
