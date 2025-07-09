@@ -220,6 +220,9 @@ with tab1:
 
      # ─── Density  ───────────────────────────────────────
         # prepare two scenarios
+    # ─── Passenger Distance Density (scaled by passenger count) ────────────────
+
+# prepare two scenarios
     df_b = df[["Distance (km)", "Passengers"]].rename(columns={"Distance (km)": "x", "Passengers": "w"})
     df_a = df[["Distance (km)", "Passengers after policy"]].rename(columns={"Distance (km)": "x", "Passengers after policy": "w"})
     scenarios = {"Before": df_b, "After": df_a}
@@ -268,6 +271,7 @@ with tab1:
     )
     
     st.plotly_chart(fig3, use_container_width=True)
+
 
     # ─── Kepler country‐level arcs ──────────────────────────────────────────────
     reqc = ["Origin Lat","Origin Lon","Dest Lat","Dest Lon"]
