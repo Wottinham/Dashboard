@@ -218,10 +218,10 @@ with tab1:
 
     st.markdown("---")
 
-     # ─── Density via normal‐approximation ───────────────────────────────────────
-    # prepare two scenarios
-    df_b = df[["Distance (km)", "Passengers"]].rename(columns={"Distance (km)":"x","Passengers":"w"})
-    df_a = df[["Distance (km)", "Passengers after policy"]].rename(columns={"Distance (km)":"x","Passengers after policy":"w"})
+     # ─── Density  ───────────────────────────────────────
+        # prepare two scenarios
+    df_b = df[["Distance (km)", "Passengers"]].rename(columns={"Distance (km)": "x", "Passengers": "w"})
+    df_a = df[["Distance (km)", "Passengers after policy"]].rename(columns={"Distance (km)": "x", "Passengers after policy": "w"})
     scenarios = {"Before": df_b, "After": df_a}
     
     fig3 = go.Figure()
@@ -230,38 +230,38 @@ with tab1:
         x_vals = sub["x"].dropna().to_numpy()
         w_vals = sub["w"].fillna(0).to_numpy()
     
-        if len(x_vals)==0:
-            # nothing to plot
+        if len(x_vals) == 0:
             continue
     
-        # if all weights zero, fall back to equal‐weight
+        # compute weighted mean & variance (if total weight > 0)
         if w_vals.sum() > 0:
-            mu    = np.average(x_vals, weights=w_vals)
-            var   = np.average((x_vals - mu) ** 2, weights=w_vals)
+            mu  = np.average(x_vals, weights=w_vals)
+            var = np.average((x_vals - mu) ** 2, weights=w_vals)
         else:
-            mu    = x_vals.mean()
-            var   = x_vals.var()
+            mu  = x_vals.mean()
+            var = x_vals.var()
     
         sigma = np.sqrt(var)
-        # fallback small bandwidth if zero or nan
         if not np.isfinite(sigma) or sigma < 1e-3:
+            # fallback bandwidth
             sigma = (x_vals.max() - x_vals.min()) / 20 or 1.0
     
         # build smooth grid ±4σ
         xs = np.linspace(mu - 4 * sigma, mu + 4 * sigma, 500)
-        # scale pdf by total passengers (or by count if weights all zero)
-        scale = w_vals.sum() if w_vals.sum() > 0 else len(x_vals)
+        # **scale by total passengers**
+        scale = w_vals.sum()  # total passenger count
         ys    = norm.pdf(xs, mu, sigma) * scale
     
         fig3.add_trace(go.Scatter(
-            x=xs, y=ys,
+            x=xs,
+            y=ys,
             mode="lines",
             fill="tozeroy",
             name=name
         ))
     
     fig3.update_layout(
-        title="📊 Passenger Distance Density: Before vs After Policy",
+        title="📊 Passenger Distance Density (scaled by passenger count)",
         xaxis_title="Distance (km)",
         yaxis_title="Passenger count (approx)",
         legend_title_text=""
