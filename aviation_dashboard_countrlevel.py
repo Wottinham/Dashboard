@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-from scipy.stats import gaussian_kde
 from keplergl import KeplerGl
 import streamlit.components.v1 as components
 import statsmodels.formula.api as smf
@@ -19,8 +18,7 @@ def load_dummy_data() -> pd.DataFrame:
     rows = []
     for o in origins:
         for d in dests:
-            if o == d:
-                continue
+            if o == d: continue
             rows.append({
                 "Origin Country Name":      o,
                 "Destination Country Name": d,
@@ -206,37 +204,37 @@ with tab1:
 
     st.markdown("---")
 
-    # 3) Density curves (volume-scaled KDE)
+    # 3) Density plot (histogram-based, density=True)
     df_b = df[["Distance (km)","Passengers"]].rename(
            columns={"Distance (km)":"Distance_km","Passengers":"Count"})
     df_a = df[["Distance (km)","Passengers after policy"]].rename(
            columns={"Distance (km)":"Distance_km","Passengers after policy":"Count"})
 
-    x_min = min(df_b["Distance_km"].min(), df_a["Distance_km"].min())
-    x_max = max(df_b["Distance_km"].max(), df_a["Distance_km"].max())
-    x_grid = np.linspace(x_min, x_max, 500)
+    min_d = min(df_b["Distance_km"].min(), df_a["Distance_km"].min())
+    max_d = max(df_b["Distance_km"].max(), df_a["Distance_km"].max())
+    bins  = np.linspace(min_d, max_d, 50)
 
     dens_list = []
-    for label, sub in [("Before", df_b), ("After", df_a)]:
-        x = sub["Distance_km"].values
-        w = sub["Count"].values
-        try:
-            kde = gaussian_kde(x, weights=w)
-            y   = kde(x_grid) * w.sum()
-        except Exception:
-            hist, edges = np.histogram(x, bins=50, weights=w)
-            centers     = 0.5*(edges[:-1]+edges[1:])
-            x_grid, y   = centers, hist
+    for label, subset in [("Before", df_b), ("After", df_a)]:
+        x = subset["Distance_km"].dropna().to_numpy()
+        w = subset["Count"].fillna(0).to_numpy()
+        hist, edges = np.histogram(x, bins=bins, weights=w, density=True)
+        centers = 0.5 * (edges[:-1] + edges[1:])
         dens_list.append(pd.DataFrame({
-            "Distance (km)": x_grid,
-            "Count": y,
+            "Distance (km)": centers,
+            "Density": hist,
             "Scenario": label
         }))
-
     dens_df = pd.concat(dens_list, ignore_index=True)
-    fig3 = px.line(dens_df,
-                   x="Distance (km)", y="Count", color="Scenario",
-                   title="Passenger Distance Distribution: Before vs After")
+
+    fig3 = px.line(
+        dens_df,
+        x="Distance (km)",
+        y="Density",
+        color="Scenario",
+        title="Passenger Distance Density: Before vs After",
+        labels={"Density":"Density"}
+    )
     fig3.update_traces(line_shape="spline")
     st.plotly_chart(fig3, use_container_width=True)
 
@@ -245,7 +243,6 @@ with tab1:
     # 4) Kepler country-level arcs
     reqc = ["Origin Lat","Origin Lon","Dest Lat","Dest Lon"]
     if all(col in df.columns for col in reqc):
-        # centroids
         ocd = df[["Origin Country Name","Origin Lat","Origin Lon"]].rename(
               columns={"Origin Country Name":"Country","Origin Lat":"Lat","Origin Lon":"Lon"})
         dcd = df[["Destination Country Name","Dest Lat","Dest Lon"]].rename(
@@ -255,7 +252,6 @@ with tab1:
                 .groupby("Country", as_index=False)[["Lat","Lon"]]
                 .mean())
 
-        # unordered pairs
         ab = df[["Origin Country Name","Destination Country Name",
                  "Passengers","Passengers after policy"]].copy()
         ab["A"] = np.where(ab["Origin Country Name"] < ab["Destination Country Name"],
@@ -267,7 +263,6 @@ with tab1:
                 .agg({"Passengers":"sum","Passengers after policy":"sum"}))
         pa["Traffic Δ (%)"] = (pa["Passengers after policy"]/pa["Passengers"] - 1)*100
 
-        # merge centroids
         pa = (pa.merge(cent, left_on="A", right_on="Country", how="left")
                  .rename(columns={"Lat":"A Lat","Lon":"A Lon"})
                  .drop(columns="Country")
@@ -312,8 +307,7 @@ with tab1:
 
         km = KeplerGl(height=1600, data={"pairs":pa}, config=cfg)
         raw = km._repr_html_()
-        if isinstance(raw, bytes):
-            raw = raw.decode("utf-8")
+        if isinstance(raw, bytes): raw = raw.decode("utf-8")
         components.html(raw, height=1200, width=1800, scrolling=True)
     else:
         st.info("Upload coords to see Kepler map")
@@ -326,27 +320,21 @@ with tab2:
     else:
         df["OD_Pair"] = df["Origin Airport"] + " ─ " + df["Destination Airport"]
         num_cols     = df.select_dtypes(include="number").columns.tolist()
-
         dep   = st.selectbox("Dependent var",   num_cols,
                              index=num_cols.index("Passengers after policy")
                                    if "Passengers after policy" in num_cols else 0)
         indep = st.multiselect("Independent vars", [c for c in num_cols if c!=dep],
                                default=[c for c in ["Fare Δ (%)","Passenger Δ (%)"] if c in num_cols])
-
-        fe_time = st.checkbox("Year fixed effects", value=True)
-        fe_unit = st.checkbox("OD_Pair fixed effects", value=False)
-        run     = st.button("Run regression")
-
-        if run:
+        fe_time = st.checkbox("Year FE",   value=True)
+        fe_unit = st.checkbox("OD_Pair FE",value=False)
+        if st.button("Run regression"):
             rhs = indep.copy()
             if fe_time: rhs.append("C(Year)")
             if fe_unit: rhs.append("C(OD_Pair)")
             formula = f"{dep} ~ " + " + ".join(rhs)
             try:
                 model = smf.ols(formula, data=df).fit(
-                    cov_type="cluster",
-                    cov_kwds={"groups":df["OD_Pair"]}
-                )
+                    cov_type="cluster", cov_kwds={"groups":df["OD_Pair"]})
                 st.write(model.summary())
             except Exception as e:
                 st.error(f"Regression failed: {e}")
