@@ -4,8 +4,6 @@ import numpy as np
 import plotly.express as px
 from keplergl import KeplerGl
 import streamlit.components.v1 as components
-
-# statsmodels for regression
 import statsmodels.formula.api as smf
 
 # ----------------------
@@ -55,7 +53,6 @@ with st.sidebar:
     uploaded_file = st.file_uploader("Upload airport-pair passenger CSV", type=["csv"], key="upload_csv")
     coord_file    = st.file_uploader("Upload airport coordinates (.xlsx)", type=["xlsx"], key="upload_coords")
 
-# Passenger data
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
     st.sidebar.success("✅ Passenger CSV loaded.")
@@ -77,49 +74,61 @@ df = df.dropna(subset=required_cols).reset_index(drop=True)
 origin_all = sorted(df["Origin Country Name"].unique())
 dest_all   = sorted(df["Destination Country Name"].unique())
 
-# Carbon pricing policy
 with st.sidebar:
     enable_carbon = st.checkbox("Enable carbon pricing?", key="chk_carbon")
     if enable_carbon:
         ets_price = st.slider("Carbon price (EUR / tCO₂)", 0, 400, 100, 5, key="slider_ets")
-        carbon_origin_countries = st.multiselect("Origin countries taxed (carbon):", origin_all,
-                                                 default=origin_all, key="mslt_carbon_orig")
-        carbon_dest_countries   = st.multiselect("Destination countries taxed (carbon):", dest_all,
-                                                 default=dest_all, key="mslt_carbon_dest")
+        carbon_origin_countries = st.multiselect(
+            "Origin countries taxed (carbon):", origin_all,
+            default=origin_all, key="mslt_carbon_orig"
+        )
+        carbon_dest_countries = st.multiselect(
+            "Destination countries taxed (carbon):", dest_all,
+            default=dest_all, key="mslt_carbon_dest"
+        )
     else:
         ets_price = 0.0
         carbon_origin_countries = []
-        carbon_dest_countries   = []
+        carbon_dest_countries = []
 
-    # Air passenger tax policy
     enable_tax = st.checkbox("Enable air passenger tax?", key="chk_tax")
     if enable_tax:
-        air_passenger_tax   = st.slider("Air Passenger Tax (USD)", 0, 100, 10, 1, key="slider_tax")
-        tax_origin_countries = st.multiselect("Origin countries taxed (tax):", origin_all,
-                                              default=origin_all, key="mslt_tax_orig")
-        tax_dest_countries   = st.multiselect("Destination countries taxed (tax):", dest_all,
-                                              default=dest_all, key="mslt_tax_dest")
+        air_passenger_tax = st.slider("Air Passenger Tax (USD)", 0, 100, 10, 1, key="slider_tax")
+        tax_origin_countries = st.multiselect(
+            "Origin countries taxed (tax):", origin_all,
+            default=origin_all, key="mslt_tax_orig"
+        )
+        tax_dest_countries = st.multiselect(
+            "Destination countries taxed (tax):", dest_all,
+            default=dest_all, key="mslt_tax_dest"
+        )
     else:
-        air_passenger_tax    = 0.0
+        air_passenger_tax = 0.0
         tax_origin_countries = []
-        tax_dest_countries   = []
+        tax_dest_countries = []
 
-    # Parameters
     st.markdown("### Parameters")
-    pass_through = st.slider("Cost pass-through to fares (%)", 0, 100, 80, 5,
-                             help="Share of carbon cost and ticket tax airlines embed in ticket prices.",
-                             key="slider_pass_through") / 100
+    pass_through = st.slider(
+        "Cost pass-through to fares (%)", 0, 100, 80, 5,
+        help="Share of carbon cost and ticket tax airlines embed in ticket prices.",
+        key="slider_pass_through"
+    ) / 100
 
-    emission_factor = st.slider("Emission factor (kg CO₂ per pax-km)", 0.0, 1.0, 0.115, 0.001,
-                                help="kg of CO₂ emitted per passenger-km flown.",
-                                key="slider_emission_factor")
+    emission_factor = st.slider(
+        "Emission factor (kg CO₂ per pax-km)", 0.0, 1.0, 0.115, 0.001,
+        help="kg of CO₂ emitted per passenger-km flown.",
+        key="slider_emission_factor"
+    )
 
-    # Economic inputs
-    global_gdp_growth   = st.slider("Global real GDP growth (%)", -5.0, 8.0, 2.5, 0.1, key="slider_gdp_global")
-    user_price_elast    = st.slider("Demand price elasticity (negative)", -2.0, -0.1,
-                                    PRICE_ELASTICITY_DEMAND, 0.1, key="slider_price_elast")
-    user_gdp_elast      = st.slider("Demand GDP elasticity", 0.5, 2.0, GDP_ELASTICITY_DEMAND, 0.1,
-                                    key="slider_gdp_elast")
+    global_gdp_growth = st.slider("Global real GDP growth (%)", -5.0, 8.0, 2.5, 0.1, key="slider_gdp_global")
+    user_price_elast  = st.slider(
+        "Demand price elasticity (negative)", -2.0, -0.1,
+        PRICE_ELASTICITY_DEMAND, 0.1, key="slider_price_elast"
+    )
+    user_gdp_elast    = st.slider(
+        "Demand GDP elasticity", 0.5, 2.0, GDP_ELASTICITY_DEMAND, 0.1,
+        key="slider_gdp_elast"
+    )
 
     st.markdown("### Optional: Adjust GDP Growth by Country")
     gdp_growth_by_country = {}
@@ -135,7 +144,6 @@ with st.sidebar:
 # ----------------------------------------
 df["CO2 per pax (kg)"] = df["Distance (km)"] * emission_factor
 
-# Carbon cost
 df["Carbon cost per pax"] = 0.0
 if enable_carbon:
     mask_c = (
@@ -146,7 +154,6 @@ if enable_carbon:
         df.loc[mask_c, "CO2 per pax (kg)"] / 1_000 * ets_price * pass_through
     )
 
-# Passenger tax
 df["Air passenger tax per pax"] = 0.0
 if enable_tax:
     mask_t = (
@@ -155,7 +162,6 @@ if enable_tax:
     )
     df.loc[mask_t, "Air passenger tax per pax"] = air_passenger_tax * pass_through
 
-# New fare & Δ
 df["New Avg Fare"] = (
     df["Avg. Total Fare(USD)"] +
     df["Carbon cost per pax"] +
@@ -163,22 +169,18 @@ df["New Avg Fare"] = (
 )
 df["Fare Δ (%)"] = (df["New Avg Fare"] / df["Avg. Total Fare(USD)"] - 1) * 100
 
-# Elasticity & GDP
 fare_factor = (
     (df["New Avg Fare"] / df["Avg. Total Fare(USD)"])
     .replace([np.inf, -np.inf], np.nan) ** user_price_elast
 )
-df["GDP Growth (%)"] = df["Origin Country Name"].map(gdp_growth_by_country).fillna(global_gdp_growth)
-df["GDP Growth Factor"] = (1 + df["GDP Growth (%)"] / 100) ** user_gdp_elast
-
+df["GDP Growth (%)"]       = df["Origin Country Name"].map(gdp_growth_by_country).fillna(global_gdp_growth)
+df["GDP Growth Factor"]    = (1 + df["GDP Growth (%)"] / 100) ** user_gdp_elast
 df["Passengers after policy"] = df["Passengers"] * fare_factor * df["GDP Growth Factor"]
 df["Passenger Δ (%)"]         = (df["Passengers after policy"] / df["Passengers"] - 1) * 100
 
-# Initialize coords
 df["Origin Lat"] = np.nan; df["Origin Lon"] = np.nan
 df["Dest Lat"]   = np.nan; df["Dest Lon"]   = np.nan
 
-# Load & merge coords
 if coord_file:
     try:
         coords_df = pd.read_excel(coord_file, engine="openpyxl")
@@ -213,7 +215,7 @@ with tab1:
         ]], use_container_width=True
     )
 
-    # Bar: passenger change
+    # Barplot: passenger change
     origin_summary = df.groupby("Origin Country Name", as_index=False).agg({
         "Passengers":              "sum",
         "Passengers after policy": "sum"
@@ -240,7 +242,7 @@ with tab1:
     with col2:
         st.metric("Avg. Carbon Cost (€)", f"{df['Carbon cost per pax'].mean():.2f}")
 
-    # Bar: fare change
+    # Barplot: fare change
     origin_price_summary = (
         df.groupby("Origin Country Name", as_index=False)
           .agg({"Fare Δ (%)": "mean"})
@@ -255,27 +257,27 @@ with tab1:
     fig_price.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
     st.plotly_chart(fig_price, use_container_width=True)
 
-    # Density curves (lines)
+    # Density curves (lines) instead of bars
     df_before = df[["Distance (km)", "Passengers"]].copy()
     df_before["Scenario"] = "Before"
     df_after  = df[["Distance (km)", "Passengers after policy"]].copy()
     df_after.rename(columns={"Passengers after policy": "Passengers"}, inplace=True)
     df_after["Scenario"] = "After"
 
+    dens_df = pd.concat([df_before, df_after], ignore_index=True)
     fig_density = px.line(
-    dens_df,
-    x="Distance (km)", y="Passengers",
-    color="Scenario",
-    line_shape="spline",      # ← moved here
-    title="📊 Passenger Distance Density: Before vs After Policy",
-    labels={"Passengers": "Density"}
+        dens_df,
+        x="Distance (km)", y="Passengers",
+        color="Scenario",
+        line_shape="spline",
+        title="📊 Passenger Distance Density: Before vs After Policy",
+        labels={"Passengers": "Density"}
     )
     st.plotly_chart(fig_density, use_container_width=True)
 
-    # Kepler map (country-level arcs)
+    # Kepler map (country-level arcs, large)
     req = ["Origin Lat","Origin Lon","Dest Lat","Dest Lon"]
     if all(c in df.columns for c in req):
-        # build centroids
         co = df[["Origin Country Name","Origin Lat","Origin Lon"]].rename(
             columns={"Origin Country Name":"Country","Origin Lat":"Lat","Origin Lon":"Lon"}
         )
@@ -285,10 +287,12 @@ with tab1:
         cents = pd.concat([co,cd],ignore_index=True).dropna(subset=["Lat","Lon"])
         cents = cents.groupby("Country",as_index=False)[["Lat","Lon"]].mean()
 
-        ab = df[["Origin Country Name","Destination Country Name",
-                 "Passengers","Passengers after policy"]].copy()
+        ab = df[[
+            "Origin Country Name","Destination Country Name",
+            "Passengers","Passengers after policy"
+        ]].copy()
         ab["A"],ab["B"] = np.where(
-            ab["Origin Country Name"] < ab["Destination Country Name"],
+            ab["Origin Country Name"]<ab["Destination Country Name"],
             (ab["Origin Country Name"],ab["Destination Country Name"]),
             (ab["Destination Country Name"],ab["Origin Country Name"])
         )
@@ -297,7 +301,6 @@ with tab1:
         })
         pa["Traffic Δ (%)"] = (pa["Passengers after policy"]/pa["Passengers"] - 1)*100
 
-        # merge centroids
         pa = (
             pa
             .merge(cents,left_on="A", right_on="Country", how="left")
@@ -315,15 +318,20 @@ with tab1:
               "layers":[{
                 "id":"arc","type":"arc","config":{
                   "dataId":"pairs","label":"Traffic Δ (%)",
-                  "columns":{"lat0":"A Lat","lng0":"A Lon","lat1":"B Lat","lng1":"B Lon"},
+                  "columns":{
+                    "lat0":"A Lat","lng0":"A Lon",
+                    "lat1":"B Lat","lng1":"B Lon"
+                  },
                   "isVisible":True,
                   "visConfig":{
                     "thickness":3,"opacity":0.8,
                     "colorField":{"name":"Traffic Δ (%)","type":"real"},
                     "colorScale":"quantile",
                     "colorRange":{
-                      "name":"Global Warming","type":"sequential","category":"Uber",
-                      "colors":["#ffffcc","#a1dab4","#41b6c4","#2c7fb8","#253494"]
+                      "name":"Global Warming","type":"sequential",
+                      "category":"Uber",
+                      "colors":["#ffffcc","#a1dab4",
+                                "#41b6c4","#2c7fb8","#253494"]
                     },
                     "sizeField":"Traffic Δ (%)","sizeScale":10
                   }
@@ -344,7 +352,6 @@ with tab1:
         if isinstance(raw, bytes):
             raw = raw.decode("utf-8")
         components.html(raw, height=1200, width=1800, scrolling=True)
-
     else:
         st.warning("Upload coords with Origin/ Dest Lat/Lon to see the Kepler map.")
 
@@ -353,26 +360,22 @@ with tab1:
 # ----------------------------------------
 with tab2:
     st.subheader("📊 Regression Analysis")
-
     is_panel = "Year" in df.columns
     st.info("Panel data detected." if is_panel else "Cross-sectional data.")
 
-    # choose variables
     num_cols = df.select_dtypes(include="number").columns.tolist()
     dep_var  = st.selectbox("Dependent variable", num_cols, key="dep")
     indeps   = st.multiselect("Independent variables", [c for c in num_cols if c != dep_var], key="indep")
 
-    # fixed effects choices
     fe_choices = ["Origin Country Name", "Destination Country Name"]
     if is_panel:
         fe_choices.append("Year")
-    fe_sel = st.multiselect("Fixed effects", fe_choices, key="fe")
+    fe_sel = st.multiselect("Fixed effects (unselectable)", fe_choices, key="fe")
 
     if st.button("Run regression", key="run_reg"):
         if not indeps:
             st.error("Select at least one independent variable.")
         else:
-            # build formula
             formula = f"`{dep_var}` ~ " + " + ".join(f"`{v}`" for v in indeps)
             for fe in fe_sel:
                 formula += " + C(`" + fe + "`)"
