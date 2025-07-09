@@ -394,20 +394,23 @@ with tab_sim:
                     )
                     st.plotly_chart(fig_hhi, use_container_width=True)
 
-                    # Pie charts: capacity share by airline, per Origin Country
+                    # Pie charts: capacity share by airline, per Origin Country (top 10 only, small size)
                     for country in supply_df["Origin Country Name"].unique():
                         pie_df = (
                             supply_df[supply_df["Origin Country Name"] == country]
                             .groupby("Operating Airline", as_index=False)
                             .agg({"Adj Capacity":"sum"})
+                            .nlargest(10, "Adj Capacity")      # top 10 airlines
                         )
                         fig_pie = px.pie(
                             pie_df,
                             names="Operating Airline",
                             values="Adj Capacity",
-                            title=f"{country}: Operating Airline Capacity Share"
+                            title=f"{country}: Top 10 Airline Capacity Share",
+                            height=300,
+                            width=300
                         )
-                        st.plotly_chart(fig_pie, use_container_width=True)
+                        st.plotly_chart(fig_pie, use_container_width=False, width=300, height=300)
             else:
                 st.info("Upload a supply CSV to see HHI & capacity share analysis.")
 
