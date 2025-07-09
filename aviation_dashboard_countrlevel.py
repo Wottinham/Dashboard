@@ -334,7 +334,7 @@ with tab_sim:
             supply_file = st.file_uploader(
                 "Upload supply CSV",
                 type=["csv"],
-                help="Columns: Origin Airport, Destination Airport, Operating Airline, Operating Airline Capacity",
+                help="Columns: Origin Airport, Destination Airport, Operating Airline, Operating Airline  Capacity",
                 key="supply"
             )
             if supply_file:
