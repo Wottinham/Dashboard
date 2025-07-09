@@ -262,15 +262,14 @@ with tab1:
     df_after.rename(columns={"Passengers after policy": "Passengers"}, inplace=True)
     df_after["Scenario"] = "After"
 
-    dens_df = pd.concat([df_before, df_after], ignore_index=True)
     fig_density = px.line(
-        dens_df,
-        x="Distance (km)", y="Passengers",
-        color="Scenario",
-        title="📊 Passenger Distance Density: Before vs After Policy",
-        labels={"Passengers": "Density"}
+    dens_df,
+    x="Distance (km)", y="Passengers",
+    color="Scenario",
+    line_shape="spline",      # ← moved here
+    title="📊 Passenger Distance Density: Before vs After Policy",
+    labels={"Passengers": "Density"}
     )
-    fig_density.update_traces(line_shape="spline")
     st.plotly_chart(fig_density, use_container_width=True)
 
     # Kepler map (country-level arcs)
