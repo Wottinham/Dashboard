@@ -218,42 +218,58 @@ with tab1:
 
     st.markdown("---")
 
-    # ─── Density via normal‐approximation ───────────────────────────────────────
-    # compute weighted mean & std
-    df_b = df[["Distance (km)","Passengers"]].rename(
-        columns={"Distance (km)":"x","Passengers":"w"})
-    df_a = df[["Distance (km)","Passengers after policy"]].rename(
-        columns={"Distance (km)":"x","Passengers after policy":"w"})
+     # ─── Density via normal‐approximation ───────────────────────────────────────
+    # prepare before/after weighted samples
+    df_b = df[["Distance (km)", "Passengers"]].rename(
+        columns={"Distance (km)": "x", "Passengers": "w"}
+    )
+    df_a = df[["Distance (km)", "Passengers after policy"]].rename(
+        columns={"Distance (km)": "x", "Passengers after policy": "w"}
+    )
 
     scenarios = {
         "Before": df_b,
         "After":  df_a
     }
     fig3 = go.Figure()
+
     for name, sub in scenarios.items():
-        x = sub["x"].to_numpy()
-        w = sub["w"].to_numpy()
-        if w.sum() == 0:
+        x_vals = sub["x"].to_numpy()
+        w_vals = sub["w"].to_numpy()
+        # skip if no weight
+        if np.nansum(w_vals) == 0:
             continue
-        mu    = np.average(x, weights=w)
-        sigma = np.sqrt(np.average((x-mu)**2, weights=w))
-        # build x-axis
-        xs = np.arange(mu-4*sigma, mu+4*sigma, 0.001)
-        ys = norm.pdf(xs, mu, sigma) * w.sum()  # scaled by total passengers
+
+        # compute weighted mean & variance
+        mu = np.nan_to_num(np.average(x_vals, weights=w_vals), nan=0.0)
+        var = np.nan_to_num(np.average((x_vals - mu) ** 2, weights=w_vals), nan=0.0)
+        sigma = np.sqrt(var)
+
+        # only plot if sigma is positive and finite
+        if not np.isfinite(sigma) or sigma <= 0:
+            continue
+
+        # build smooth x‐axis over ±4σ
+        start, stop = mu - 4 * sigma, mu + 4 * sigma
+        xs = np.linspace(start, stop, 1000)
+
+        # PDF scaled by total passenger count
+        ys = norm.pdf(xs, mu, sigma) * np.nansum(w_vals)
+
         fig3.add_trace(go.Scatter(
-            x=xs, y=ys,
-            mode='lines',
-            fill='tozeroy',
-            name=name
+            x=xs,
+            y=ys,
+            mode="lines",
+            fill="tozeroy",
+            name=name,
         ))
+
     fig3.update_layout(
         title="Passenger Distance Distribution (Normal approx.)",
         xaxis_title="Distance (km)",
-        yaxis_title="Approx. passenger-km density"
+        yaxis_title="Approx. passenger‐km density"
     )
     st.plotly_chart(fig3, use_container_width=True)
-
-    st.markdown("---")
 
     # ─── Kepler country‐level arcs ──────────────────────────────────────────────
     reqc = ["Origin Lat","Origin Lon","Dest Lat","Dest Lon"]
