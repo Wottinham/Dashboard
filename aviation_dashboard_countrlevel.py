@@ -7,6 +7,7 @@ from scipy.stats import norm
 from keplergl import KeplerGl
 import streamlit.components.v1 as components
 import statsmodels.formula.api as smf
+from scipy.stats import gaussian_kde
 
 # ─── Model defaults ─────────────────────────────────────────────────────────────
 PRICE_ELASTICITY_DEMAND = -0.8
