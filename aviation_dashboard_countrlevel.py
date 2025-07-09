@@ -341,7 +341,7 @@ with tab_sim:
                 supply_df = pd.read_csv(supply_file)
                 req_sup = {
                     "Origin Airport","Destination Airport",
-                    "Operating Airline","Operating Airline Capacity"
+                    "Operating Airline","Operating Airline   Capacity"
                 }
                 if not req_sup.issubset(supply_df.columns):
                     st.error("Supply CSV missing required columns.")
@@ -353,7 +353,7 @@ with tab_sim:
                     supply_df = supply_df.merge(dest_map, on="Destination Airport", how="left")
                     # Compute HHI per airport-pair
                     def compute_hhi(g):
-                        caps = g["Operating Airline Capacity"].astype(float)
+                        caps = g["Operating Airline   Capacity"].astype(float)
                         shares = caps / caps.sum()
                         return (shares**2).sum() * 10000
                     hhi = (
