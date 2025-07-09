@@ -257,7 +257,7 @@ with tab1:
     fig_price.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
     st.plotly_chart(fig_price, use_container_width=True)
 
-    # Density curves (lines) instead of bars
+    # Density curves (lines) instead of bars – now sorted by distance
     df_before = df[["Distance (km)", "Passengers"]].copy()
     df_before["Scenario"] = "Before"
     df_after  = df[["Distance (km)", "Passengers after policy"]].copy()
@@ -265,6 +265,9 @@ with tab1:
     df_after["Scenario"] = "After"
 
     dens_df = pd.concat([df_before, df_after], ignore_index=True)
+    # **SORT** each scenario by Distance so lines draw in order
+    dens_df = dens_df.sort_values(by=["Scenario", "Distance (km)"])
+
     fig_density = px.line(
         dens_df,
         x="Distance (km)", y="Passengers",
