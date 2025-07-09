@@ -112,7 +112,9 @@ st.sidebar.markdown("### Optional: GDP by origin")
 gdp_by_country = {}
 with st.sidebar.expander("Customize GDP growth"):
     for c in origin_all:
-        gdp_by_country[c] = st.slider(f"{c} GDP growth (%)", -5.0, 8.0, global_gdp, 0.1, key=f"gdp_{c}")
+        gdp_by_country[c] = st.slider(
+            f"{c} GDP growth (%)", -5.0, 8.0, global_gdp, 0.1, key=f"gdp_{c}"
+        )
 
 # ----------------------
 # Apply policies to data
@@ -141,8 +143,8 @@ fare_factor = (
     (df["New Avg Fare"] / df["Avg. Total Fare(USD)"])
     .replace([np.inf, -np.inf], np.nan) ** price_elast
 )
-df["GDP Growth (%)"]      = df["Origin Country Name"].map(gdp_by_country).fillna(global_gdp)
-df["GDP Growth Factor"]   = (1 + df["GDP Growth (%)"]/100) ** gdp_elast
+df["GDP Growth (%)"]    = df["Origin Country Name"].map(gdp_by_country).fillna(global_gdp)
+df["GDP Growth Factor"] = (1 + df["GDP Growth (%)"]/100) ** gdp_elast
 
 df["Passengers after policy"] = (
     df["Passengers"] * fare_factor * df["GDP Growth Factor"]
@@ -326,16 +328,37 @@ with tab_sim:
         else:
             st.warning("Upload coords to see Kepler map.")
 
-    # Catalytic effects (placeholder)
+    # Catalytic effects
     with sub2:
         st.subheader("🧪 Catalytic effects")
-        st.write("Analysis of catalytic pathways coming soon.")
+        # Bubble chart: change in passengers vs regional GDP change
+        airport_df = df.groupby("Origin Airport", as_index=False).agg(
+            Passengers=("Passengers","sum"),
+            After=("Passengers after policy","sum")
+        )
+        airport_df["Change"]     = airport_df["After"] - airport_df["Passengers"]
+        airport_df["GDP Change"] = 0.1 * airport_df["Change"]
+        fig_bubble = px.scatter(
+            airport_df,
+            x="Change",
+            y="GDP Change",
+            size="Passengers",
+            hover_name="Origin Airport",
+            title="Catalytic Effects: Passenger Change vs Regional GDP Change",
+            labels={
+                "Change": "Passenger Change",
+                "GDP Change": "Regional GDP Change",
+                "Passengers": "Total Passengers"
+            }
+        )
+        fig_bubble.update_traces(marker=dict(opacity=0.7, line=dict(width=1, color="DarkSlateGrey")))
+        st.plotly_chart(fig_bubble, use_container_width=True)
 
 # ---- Regression tab ----
 with tab_reg:
     st.subheader("📊 Panel Regression Analysis")
     if panel_data:
         st.write("Detected 'Year' column – ready for regression.")
-        # <-- your regression UI and model output here -->
+        # Regression UI and output go here...
     else:
         st.info("Upload panel data with a 'Year' column to enable regression mode.")
