@@ -247,6 +247,9 @@ if mode == "Descriptives":
             st.plotly_chart(fig, use_container_width=True)
 
     # Sankey: change in passenger flows between two years
+        # ─────────────────────────────────────────────────────────
+    # Sankey: change in passenger flows for one origin
+    # ─────────────────────────────────────────────────────────
     if "Year" in df.columns:
         st.markdown("---")
         st.subheader("🔄 Sankey: Change in Passenger Flows")
@@ -258,77 +261,85 @@ if mode == "Descriptives":
             key="sankey_level"
         )
 
-        # 2) choose two distinct years
+        # determine grouping columns
+        if agg_level == "Airport":
+            origin_col = "Origin Airport"
+            dest_col   = "Destination Airport"
+        else:
+            origin_col = "Origin Country Name"
+            dest_col   = "Destination Country Name"
+
+        # 2) select one origin
+        origin_vals = sorted(df[origin_col].unique())
+        selected_origin = st.selectbox(
+            f"Select {agg_level} of origin",
+            origin_vals,
+            key="sankey_origin"
+        )
+
+        # 3) pick two distinct years
         years = sorted(df["Year"].unique())
-        col1, col2 = st.columns(2)
-        with col1:
+        c1, c2 = st.columns(2)
+        with c1:
             year1 = st.selectbox("From Year", years, index=0, key="sankey_year1")
-        with col2:
-            # default to next year if available
+        with c2:
             default_idx = 1 if len(years) > 1 else 0
             year2 = st.selectbox("To Year", years, index=default_idx, key="sankey_year2")
 
-        if year1 == year2:
-            st.warning("Please select two different years to see changes.")
-        else:
-            # group by either Airport or Country
-            if agg_level == "Airport":
-                grp = ["Origin Airport", "Destination Airport"]
-            else:
-                grp = ["Origin Country Name", "Destination Country Name"]
+        # 4) top‐N destinations
+        top_n = st.number_input(
+            "Top N destinations",
+            min_value=1, max_value=20, value=5, step=1,
+            key="sankey_topn"
+        )
 
-            # sum passengers for each pair in each year
+        if year1 == year2:
+            st.warning("Please select two different years.")
+        else:
+            # sum passengers for each pair & year
             df1 = (
                 df[df["Year"] == year1]
-                .groupby(grp, as_index=False)["Passengers"]
-                .sum()
-                .rename(columns={"Passengers": "P1"})
+                .query(f"{origin_col} == @selected_origin")
+                .groupby([origin_col, dest_col], as_index=False)["Passengers"]
+                .sum().rename(columns={"Passengers":"P1"})
             )
             df2 = (
                 df[df["Year"] == year2]
-                .groupby(grp, as_index=False)["Passengers"]
-                .sum()
-                .rename(columns={"Passengers": "P2"})
+                .query(f"{origin_col} == @selected_origin")
+                .groupby([origin_col, dest_col], as_index=False)["Passengers"]
+                .sum().rename(columns={"Passengers":"P2"})
             )
 
-            # merge and compute delta
-            sank = (
-                df1.merge(df2, on=grp, how="outer")
-                   .fillna(0)
-            )
-            sank["Delta"] = sank["P2"] - sank["P1"]
+            # merge, compute delta & abs for sizing
+            sank = df1.merge(df2, on=[origin_col, dest_col], how="outer").fillna(0)
+            sank["Delta"]    = sank["P2"] - sank["P1"]
             sank["AbsDelta"] = sank["Delta"].abs()
 
-            # build node list
-            all_nodes = list(pd.unique(sank[grp[0]].tolist() + sank[grp[1]].tolist()))
-            idx = {n: i for i, n in enumerate(all_nodes)}
+            # filter top‐N by P2 (flow in year2)
+            sank = sank.nlargest(top_n, "P2")
 
-            sources = sank[grp[0]].map(idx).tolist()
-            targets = sank[grp[1]].map(idx).tolist()
+            # build nodes list (origin + chosen dests)
+            nodes = [selected_origin] + sank[dest_col].tolist()
+            idx   = {n:i for i,n in enumerate(nodes)}
+
+            sources = [idx[selected_origin]] * len(sank)
+            targets = sank[dest_col].map(idx).tolist()
             values  = sank["AbsDelta"].tolist()
-            colors  = ["green" if d > 0 else "red" for d in sank["Delta"]]
+            colors  = ["green" if d>0 else "red" for d in sank["Delta"]]
 
             # draw Sankey
             fig_sankey = go.Figure(go.Sankey(
-                node = dict(
-                    label = all_nodes,
-                    pad   = 15,
-                    thickness = 20
-                ),
-                link = dict(
-                    source = sources,
-                    target = targets,
-                    value  = values,
-                    color  = colors
-                )
+                node=dict(label=nodes, pad=15, thickness=20),
+                link=dict(source=sources, target=targets, value=values, color=colors)
             ))
             fig_sankey.update_layout(
-                title_text = f"Passenger Flow Change: {year1} → {year2}",
-                font_size  = 10
+                title_text=f"{agg_level}-level flows from {selected_origin}: {year1} → {year2}",
+                font_size=10
             )
             st.plotly_chart(fig_sankey, use_container_width=True)
     else:
         st.info("Add a `Year` column to your data to enable the Sankey diagram.")
+
 
     with tab_desc_sup:
         st.subheader("📦 Descriptive: Supply Data")
