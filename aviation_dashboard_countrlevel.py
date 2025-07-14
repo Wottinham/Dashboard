@@ -248,6 +248,7 @@ if mode == "Descriptives":
 
     # Sankey: change in passenger flows between two years
         # ─────────────────────────────────────────────────────────
+        # ─────────────────────────────────────────────────────────
     # Sankey: change in passenger flows for one origin
     # ─────────────────────────────────────────────────────────
     if "Year" in df.columns:
@@ -296,16 +297,14 @@ if mode == "Descriptives":
         if year1 == year2:
             st.warning("Please select two different years.")
         else:
-            # sum passengers for each pair & year
+            # sum passengers for each pair & year with boolean masks
             df1 = (
-                df[df["Year"] == year1]
-                .query(f"{origin_col} == @selected_origin")
+                df[(df["Year"] == year1) & (df[origin_col] == selected_origin)]
                 .groupby([origin_col, dest_col], as_index=False)["Passengers"]
                 .sum().rename(columns={"Passengers":"P1"})
             )
             df2 = (
-                df[df["Year"] == year2]
-                .query(f"{origin_col} == @selected_origin")
+                df[(df["Year"] == year2) & (df[origin_col] == selected_origin)]
                 .groupby([origin_col, dest_col], as_index=False)["Passengers"]
                 .sum().rename(columns={"Passengers":"P2"})
             )
@@ -339,6 +338,7 @@ if mode == "Descriptives":
             st.plotly_chart(fig_sankey, use_container_width=True)
     else:
         st.info("Add a `Year` column to your data to enable the Sankey diagram.")
+
 
 
     with tab_desc_sup:
