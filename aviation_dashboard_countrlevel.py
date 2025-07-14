@@ -71,62 +71,74 @@ if not required_cols.issubset(df.columns):
 df = df.dropna(subset=required_cols).reset_index(drop=True)
 origin_all = sorted(df["Origin Country Name"].unique())
 dest_all   = sorted(df["Destination Country Name"].unique())
-
-# ----------------------
-# Detect panel data
-# ----------------------
 panel_data = "Year" in df.columns
 
+# Default policy parameters (so variables exist even in Descriptives mode)
+ets_price       = 0.0
+carbon_origin   = []
+carbon_dest     = []
+air_pass_tax    = 0.0
+tax_origin      = []
+tax_dest        = []
+pass_through    = 0.80
+emission_factor = 0.115
+global_gdp      = 2.5
+price_elast     = PRICE_ELASTICITY_DEMAND
+gdp_elast       = GDP_ELASTICITY_DEMAND
+gdp_by_country  = {c: global_gdp for c in origin_all}
+
 # ----------------------
-# Simulation inputs (always shown)
+# Top‐level view selector
 # ----------------------
-enable_carbon = st.sidebar.checkbox("Enable carbon pricing")
-if enable_carbon:
-    ets_price = st.sidebar.slider("Carbon price (EUR/tCO₂)", 0, 400, 100, 5)
-    carbon_origin = st.sidebar.multiselect("Carbon taxed: Origin countries", origin_all, default=origin_all)
-    carbon_dest   = st.sidebar.multiselect("Carbon taxed: Destination countries", dest_all, default=dest_all)
-else:
-    ets_price = 0.0
-    carbon_origin = []
-    carbon_dest = []
+mode = st.sidebar.radio("Select view", ["Descriptives", "Simulation", "Regression"])
 
-enable_tax = st.sidebar.checkbox("Enable air passenger tax")
-if enable_tax:
-    air_pass_tax = st.sidebar.slider("Air Passenger Tax (USD)", 0, 100, 10, 1)
-    tax_origin   = st.sidebar.multiselect("Taxed: Origin countries", origin_all, default=origin_all)
-    tax_dest     = st.sidebar.multiselect("Taxed: Destination countries", dest_all, default=dest_all)
-else:
-    air_pass_tax = 0.0
-    tax_origin = []
-    tax_dest = []
+# ----------------------
+# Sidebar – policy & parameter controls (hidden in Descriptives)
+# ----------------------
+if mode != "Descriptives":
+    enable_carbon = st.sidebar.checkbox("Enable carbon pricing")
+    if enable_carbon:
+        ets_price = st.sidebar.slider("Carbon price (EUR/tCO₂)", 0, 400, 100, 5)
+        carbon_origin = st.sidebar.multiselect("Carbon taxed: Origin countries", origin_all, default=origin_all)
+        carbon_dest   = st.sidebar.multiselect("Carbon taxed: Destination countries", dest_all,   default=dest_all)
+    else:
+        ets_price = 0.0
+        carbon_origin = []
+        carbon_dest   = []
 
-st.sidebar.markdown("### Parameters")
-pass_through     = st.sidebar.slider("Cost pass-through (%)", 0, 100, 80, 5) / 100
-emission_factor  = st.sidebar.slider("Emission factor (kg CO₂/pax-km)", 0.0, 1.0, 0.115, 0.001)
+    enable_tax = st.sidebar.checkbox("Enable air passenger tax")
+    if enable_tax:
+        air_pass_tax = st.sidebar.slider("Air Passenger Tax (USD)", 0, 100, 10, 1)
+        tax_origin   = st.sidebar.multiselect("Taxed: Origin countries", origin_all, default=origin_all)
+        tax_dest     = st.sidebar.multiselect("Taxed: Destination countries", dest_all,   default=dest_all)
+    else:
+        air_pass_tax = 0.0
+        tax_origin   = []
+        tax_dest     = []
 
-global_gdp   = st.sidebar.slider("Global GDP growth (%)", -5.0, 8.0, 2.5, 0.1)
-price_elast  = st.sidebar.slider("Price elasticity (neg)", -2.0, -0.1, PRICE_ELASTICITY_DEMAND, 0.1)
-gdp_elast    = st.sidebar.slider("GDP elasticity", 0.5, 2.0, GDP_ELASTICITY_DEMAND, 0.1)
+    st.sidebar.markdown("### Parameters")
+    pass_through    = st.sidebar.slider("Cost pass-through (%)", 0, 100, 80, 5) / 100
+    emission_factor = st.sidebar.slider("Emission factor (kg CO₂/pax-km)", 0.0, 1.0, 0.115, 0.001)
+    global_gdp      = st.sidebar.slider("Global GDP growth (%)", -5.0, 8.0, 2.5, 0.1)
+    price_elast     = st.sidebar.slider("Price elasticity (neg)", -2.0, -0.1, PRICE_ELASTICITY_DEMAND, 0.1)
+    gdp_elast       = st.sidebar.slider("GDP elasticity", 0.5, 2.0, GDP_ELASTICITY_DEMAND, 0.1)
 
-st.sidebar.markdown("### Optional: GDP by origin")
-gdp_by_country = {}
-with st.sidebar.expander("Customize GDP growth"):
-    for c in origin_all:
-        gdp_by_country[c] = st.slider(
-            f"{c} GDP growth (%)", -5.0, 8.0, global_gdp, 0.1, key=f"gdp_{c}"
-        )
+    st.sidebar.markdown("### Optional: GDP by origin")
+    with st.sidebar.expander("Customize GDP growth"):
+        for c in origin_all:
+            gdp_by_country[c] = st.slider(f"{c} GDP growth (%)", -5.0, 8.0, global_gdp, 0.1, key=f"gdp_{c}")
 
 # ----------------------
 # Apply policies to data
 # ----------------------
 df["CO2 per pax (kg)"] = df["Distance (km)"] * emission_factor
-df["Carbon cost per pax"]   = 0.0
-if enable_carbon:
+df["Carbon cost per pax"] = 0.0
+if mode != "Descriptives" and enable_carbon:
     mask_c = df["Origin Country Name"].isin(carbon_origin) & df["Destination Country Name"].isin(carbon_dest)
     df.loc[mask_c, "Carbon cost per pax"] = df.loc[mask_c, "CO2 per pax (kg)"] / 1000 * ets_price * pass_through
 
 df["Air passenger tax per pax"] = 0.0
-if enable_tax:
+if mode != "Descriptives" and enable_tax:
     mask_t = df["Origin Country Name"].isin(tax_origin) & df["Destination Country Name"].isin(tax_dest)
     df.loc[mask_t, "Air passenger tax per pax"] = air_pass_tax * pass_through
 
@@ -135,23 +147,16 @@ df["New Avg Fare"] = (
     + df["Carbon cost per pax"]
     + df["Air passenger tax per pax"]
 )
-df["Fare Δ (%)"] = (
-    df["New Avg Fare"] / df["Avg. Total Fare(USD)"] - 1
-) * 100
+df["Fare Δ (%)"] = (df["New Avg Fare"] / df["Avg. Total Fare(USD)"] - 1) * 100
 
 fare_factor = (
-    (df["New Avg Fare"] / df["Avg. Total Fare(USD)"])
-    .replace([np.inf, -np.inf], np.nan) ** price_elast
+    (df["New Avg Fare"] / df["Avg. Total Fare(USD)"]) ** price_elast
 )
 df["GDP Growth (%)"]    = df["Origin Country Name"].map(gdp_by_country).fillna(global_gdp)
 df["GDP Growth Factor"] = (1 + df["GDP Growth (%)"]/100) ** gdp_elast
 
-df["Passengers after policy"] = (
-    df["Passengers"] * fare_factor * df["GDP Growth Factor"]
-)
-df["Passenger Δ (%)"] = (
-    df["Passengers after policy"] / df["Passengers"] - 1
-) * 100
+df["Passengers after policy"] = df["Passengers"] * fare_factor * df["GDP Growth Factor"]
+df["Passenger Δ (%)"] = (df["Passengers after policy"] / df["Passengers"] - 1) * 100
 
 # Initialize coords
 df["Origin Lat"] = np.nan; df["Origin Lon"] = np.nan
@@ -179,22 +184,14 @@ if coord_file:
         st.sidebar.warning(f"Failed coords processing: {e}")
 
 # ----------------------
-# Top-level tabs: Simulation vs Regression
+# Main area by mode
 # ----------------------
-tab_desc, tab_sim, tab_reg = st.tabs(["Descriptives","Simulation", "Regression"])
-# ---- Descriptives tab ----
-with tab_desc:
-    desc_me, desc_sup = st.tabs(["Market Equilibrium", "Supply"])
-
-        # -- Descriptives → Market Equilibrium --
-    with desc_me:
+if mode == "Descriptives":
+    tab_desc_me, tab_desc_sup = st.tabs(["Market Equilibrium", "Supply"])
+    with tab_desc_me:
         st.subheader("📈 Descriptive: Passenger Flow")
-
-        # choose metric and plot type
         metric    = st.selectbox("Metric", ["Passengers", "Avg. Total Fare(USD)"], key="desc_metric")
         plot_type = st.selectbox("Plot type", ["Line", "Bar"], key="desc_plot")
-
-        # detect longitudinal vs cross-section
         is_long = ("Year" in df.columns) or ("Month" in df.columns)
 
         if plot_type == "Line":
@@ -204,43 +201,28 @@ with tab_desc:
                 freq = st.selectbox("Time frequency", ["Year", "Year-Month"], key="desc_freq")
                 agg   = st.selectbox("Aggregation", ["sum", "mean"], key="desc_agg")
                 level = st.selectbox("Group by", ["Origin Airport", "Origin Country Name"], key="desc_level")
-                top_n = st.number_input("Top N series", min_value=1, max_value=50, value=10, key="desc_n")
+                top_n = st.number_input("Top N series", 1, 50, 10, key="desc_n")
 
                 d = df.copy()
-
-                # build time column
                 if freq == "Year-Month" and "Month" in d.columns:
                     d["Year-Month"] = d["Year"].astype(str) + "-" + d["Month"].astype(str).str.zfill(2)
                     time_col = "Year-Month"
                 else:
                     time_col = "Year"
 
-                # aggregate
-                agg_func = getattr(pd.Series, agg)
                 d = d.groupby([time_col, level], as_index=False)[metric].agg(agg)
-
-                # keep top-N by overall sum
-                top_series = (
-                    d.groupby(level)[metric].sum()
-                     .nlargest(top_n)
-                     .index
-                )
+                top_series = d.groupby(level)[metric].sum().nlargest(top_n).index
                 d = d[d[level].isin(top_series)]
 
                 fig = px.line(
-                    d,
-                    x=time_col,
-                    y=metric,
-                    color=level,
-                    markers=True,
-                    title=f"{metric} over Time"
+                    d, x=time_col, y=metric, color=level,
+                    markers=True, title=f"{metric} over Time"
                 )
                 st.plotly_chart(fig, use_container_width=True)
-
-        else:  # Bar plot (cross-section)
+        else:
             agg   = st.selectbox("Aggregation", ["sum", "mean"], key="desc_agg_cs")
             level = st.selectbox("Group by", ["Origin Airport", "Origin Country Name"], key="desc_level_cs")
-            top_n = st.number_input("Top N", min_value=1, max_value=50, value=10, key="desc_n_cs")
+            top_n = st.number_input("Top N", 1, 50, 10, key="desc_n_cs")
 
             d = (
                 df
@@ -249,29 +231,19 @@ with tab_desc:
                 .nlargest(top_n, metric)
             )
             fig = px.bar(
-                d,
-                x=level,
-                y=metric,
-                title=f"Cross-sectional {metric}"
+                d, x=level, y=metric, title=f"Cross-sectional {metric}"
             )
             st.plotly_chart(fig, use_container_width=True)
 
-
-    # -- Descriptives → Supply --
-    with desc_sup:
+    with tab_desc_sup:
         st.subheader("📦 Descriptive: Supply Data")
         # (detection of cross-section vs longitudinal & similar controls go here)
 
-# ---- Simulation tab ----
-with tab_sim:
+elif mode == "Simulation":
     sub1, sub2 = st.tabs(["Direct effects", "Catalytic effects"])
-
-    # Direct effects with nested tabs
     with sub1:
-        tab_me, tab_supply = st.tabs(["Market Equilibrium", "Supply"])
-
-        # Market Equilibrium: current direct-effects analysis
-        with tab_me:
+        tab_sim_me, tab_sim_sup = st.tabs(["Market Equilibrium", "Supply"])
+        with tab_sim_me:
             st.subheader("📊 Airport-Pair Passenger Results")
             st.dataframe(df[[
                 "Origin Airport","Destination Airport","Passengers",
@@ -360,12 +332,10 @@ with tab_sim:
                 pa = pa.merge(cents,left_on="A",right_on="Country").rename(
                     columns={"Lat":"A Lat","Lon":"A Lon"}).drop(columns="Country")
                 pa = pa.merge(cents,left_on="B",right_on="Country").rename(
-                    columns={"Lat":"B Lat","Lon":"B Lon"}).drop(columns="Country")
+                    columns{"Lat":"B Lat","Lon":"B Lon"}).drop(columns="Country")
                 cfg = {
                   "version":"v1","config":{
-                    "visState":{
-                      "filters":[],
-                      "layers":[{
+                    "visState":{"filters":[],"layers":[{
                         "id":"arc","type":"arc","config":{
                           "dataId":"pairs","label":"Δ (%)",
                           "columns":{
@@ -383,14 +353,12 @@ with tab_sim:
                             "sizeField":"Δ (%)","sizeScale":10
                           }
                         }
-                      }],
-                      "interactionConfig":{
-                        "tooltip":{
-                          "fieldsToShow":{"pairs":["A","B","Δ (%)"]},
-                          "enabled":True
-                        }
+                    }],"interactionConfig":{
+                      "tooltip":{
+                        "fieldsToShow":{"pairs":["A","B","Δ (%)"]},
+                        "enabled":True
                       }
-                    },
+                    }},
                     "mapState":{
                       "latitude":cents["Lat"].mean(),
                       "longitude":cents["Lon"].mean(),
@@ -407,13 +375,11 @@ with tab_sim:
             else:
                 st.warning("Upload coords to see Kepler map.")
 
-        # Supply: HHI analysis on Operating Airline Capacity adjusted by passenger change
-        with tab_supply:
+        with tab_sim_sup:
             st.subheader("📦 Supply-side HHI & Capacity Share Analysis")
             supply_file = st.file_uploader(
                 "Upload supply CSV",
                 type=["csv"],
-                help="Columns: Origin Airport, Destination Airport, Operating Airline, Operating Airline   Capacity",
                 key="supply"
             )
             if supply_file:
@@ -425,13 +391,10 @@ with tab_sim:
                 if not req_sup.issubset(supply_df.columns):
                     st.error("Supply CSV missing required columns.")
                 else:
-                    # Merge country names from passenger df
                     orig_map = df[["Origin Airport","Origin Country Name"]].drop_duplicates()
                     dest_map = df[["Destination Airport","Destination Country Name"]].drop_duplicates()
                     supply_df = supply_df.merge(orig_map, on="Origin Airport", how="left")
                     supply_df = supply_df.merge(dest_map, on="Destination Airport", how="left")
-
-                    # Merge passenger change per airport-pair
                     pass_change = df[[
                         "Origin Airport","Destination Airport","Passenger Δ (%)"
                     ]]
@@ -440,19 +403,14 @@ with tab_sim:
                         on=["Origin Airport","Destination Airport"],
                         how="left"
                     ).fillna({"Passenger Δ (%)": 0})
-
-                    # Adjust capacity by passenger change
                     supply_df["Adj Capacity"] = (
                         supply_df["Operating Airline   Capacity"]
                         * (1 + supply_df["Passenger Δ (%)"] / 100)
                     )
-
-                    # Compute HHI per airport-pair using adjusted capacity
                     def compute_hhi(g):
                         caps = g["Adj Capacity"].astype(float)
                         shares = caps / caps.sum()
                         return (shares**2).sum() * 10000
-
                     hhi = (
                         supply_df
                         .groupby(
@@ -462,8 +420,6 @@ with tab_sim:
                         .apply(lambda g: pd.Series({"HHI": compute_hhi(g)}))
                         .reset_index(drop=True)
                     )
-
-                    # Box plot of HHI by Origin Country
                     fig_hhi = px.box(
                         hhi,
                         x="Origin Country Name",
@@ -473,7 +429,6 @@ with tab_sim:
                     )
                     st.plotly_chart(fig_hhi, use_container_width=True)
 
-                                         # Pie charts: top-10 capacity share, wrapped into rows of up to 4 per row
                     countries = supply_df["Origin Country Name"].unique().tolist()
                     max_cols = 4
                     for i in range(0, len(countries), max_cols):
@@ -496,12 +451,9 @@ with tab_sim:
                             )
                             with col:
                                 st.plotly_chart(fig_pie, use_container_width=False)
-
-
             else:
                 st.info("Upload a supply CSV to see HHI & capacity share analysis.")
 
-    # Catalytic effects
     with sub2:
         st.subheader("🧪 Catalytic effects")
         airport_df = df.groupby("Origin Airport", as_index=False).agg(
@@ -526,8 +478,7 @@ with tab_sim:
         fig_bubble.update_traces(marker=dict(opacity=0.7, line=dict(width=1, color="DarkSlateGrey")))
         st.plotly_chart(fig_bubble, use_container_width=True)
 
-# ---- Regression tab ----
-with tab_reg:
+else:  # Regression
     st.subheader("📊 Panel Regression Analysis")
     if panel_data:
         st.write("Detected 'Year' column – ready for regression.")
