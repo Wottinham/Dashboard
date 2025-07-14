@@ -246,6 +246,90 @@ if mode == "Descriptives":
             )
             st.plotly_chart(fig, use_container_width=True)
 
+    # Sankey: change in passenger flows between two years
+    if "Year" in df.columns:
+        st.markdown("---")
+        st.subheader("🔄 Sankey: Change in Passenger Flows")
+
+        # 1) aggregation level
+        agg_level = st.selectbox(
+            "Aggregation level",
+            ["Airport", "Country"],
+            key="sankey_level"
+        )
+
+        # 2) choose two distinct years
+        years = sorted(df["Year"].unique())
+        col1, col2 = st.columns(2)
+        with col1:
+            year1 = st.selectbox("From Year", years, index=0, key="sankey_year1")
+        with col2:
+            # default to next year if available
+            default_idx = 1 if len(years) > 1 else 0
+            year2 = st.selectbox("To Year", years, index=default_idx, key="sankey_year2")
+
+        if year1 == year2:
+            st.warning("Please select two different years to see changes.")
+        else:
+            # group by either Airport or Country
+            if agg_level == "Airport":
+                grp = ["Origin Airport", "Destination Airport"]
+            else:
+                grp = ["Origin Country Name", "Destination Country Name"]
+
+            # sum passengers for each pair in each year
+            df1 = (
+                df[df["Year"] == year1]
+                .groupby(grp, as_index=False)["Passengers"]
+                .sum()
+                .rename(columns={"Passengers": "P1"})
+            )
+            df2 = (
+                df[df["Year"] == year2]
+                .groupby(grp, as_index=False)["Passengers"]
+                .sum()
+                .rename(columns={"Passengers": "P2"})
+            )
+
+            # merge and compute delta
+            sank = (
+                df1.merge(df2, on=grp, how="outer")
+                   .fillna(0)
+            )
+            sank["Delta"] = sank["P2"] - sank["P1"]
+            sank["AbsDelta"] = sank["Delta"].abs()
+
+            # build node list
+            all_nodes = list(pd.unique(sank[grp[0]].tolist() + sank[grp[1]].tolist()))
+            idx = {n: i for i, n in enumerate(all_nodes)}
+
+            sources = sank[grp[0]].map(idx).tolist()
+            targets = sank[grp[1]].map(idx).tolist()
+            values  = sank["AbsDelta"].tolist()
+            colors  = ["green" if d > 0 else "red" for d in sank["Delta"]]
+
+            # draw Sankey
+            fig_sankey = go.Figure(go.Sankey(
+                node = dict(
+                    label = all_nodes,
+                    pad   = 15,
+                    thickness = 20
+                ),
+                link = dict(
+                    source = sources,
+                    target = targets,
+                    value  = values,
+                    color  = colors
+                )
+            ))
+            fig_sankey.update_layout(
+                title_text = f"Passenger Flow Change: {year1} → {year2}",
+                font_size  = 10
+            )
+            st.plotly_chart(fig_sankey, use_container_width=True)
+    else:
+        st.info("Add a `Year` column to your data to enable the Sankey diagram.")
+
     with tab_desc_sup:
         st.subheader("📦 Descriptive: Supply Data")
         # (detection of cross-section vs longitudinal & similar controls go here)
