@@ -181,7 +181,7 @@ if coord_file:
 # ----------------------
 # Top-level tabs: Simulation vs Regression
 # ----------------------
-tab_sim, tab_desc, tab_reg = st.tabs(["Descriptives","Simulation", "Regression"])
+tab_desc, tab_sim, tab_reg = st.tabs(["Descriptives","Simulation", "Regression"])
 # ---- Descriptives tab ----
 with tab_desc:
     desc_me, desc_sup = st.tabs(["Market Equilibrium", "Supply"])
