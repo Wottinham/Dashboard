@@ -186,92 +186,76 @@ tab_desc, tab_sim, tab_reg = st.tabs(["Descriptives","Simulation", "Regression"]
 with tab_desc:
     desc_me, desc_sup = st.tabs(["Market Equilibrium", "Supply"])
 
-    # -- Descriptives → Market Equilibrium --
+        # -- Descriptives → Market Equilibrium --
     with desc_me:
         st.subheader("📈 Descriptive: Passenger Flow")
 
-        # detect if longitudinal (Year or Month present)
+        # choose metric and plot type
+        metric    = st.selectbox("Metric", ["Passengers", "Avg. Total Fare(USD)"], key="desc_metric")
+        plot_type = st.selectbox("Plot type", ["Line", "Bar"], key="desc_plot")
+
+        # detect longitudinal vs cross-section
         is_long = ("Year" in df.columns) or ("Month" in df.columns)
 
-        if is_long:
-            view = st.radio("View type", ["Longitudinal", "Cross-sectional"], key="desc_view")
-            if view == "Longitudinal":
+        if plot_type == "Line":
+            if not is_long:
+                st.warning("Data has no Year/Month column – cannot do time series.")
+            else:
                 freq = st.selectbox("Time frequency", ["Year", "Year-Month"], key="desc_freq")
-            agg   = st.selectbox("Aggregation", ["sum", "mean"], key="desc_agg")
-            level = st.selectbox(
-                "Group by", 
-                ["Origin Airport", "Origin Country Name"], 
-                key="desc_level"
-            )
-            top_n = st.number_input("Top N series", min_value=1, max_value=50, value=10, key="desc_n")
+                agg   = st.selectbox("Aggregation", ["sum", "mean"], key="desc_agg")
+                level = st.selectbox("Group by", ["Origin Airport", "Origin Country Name"], key="desc_level")
+                top_n = st.number_input("Top N series", min_value=1, max_value=50, value=10, key="desc_n")
 
-            d = df.copy()
+                d = df.copy()
 
-            # build time column
-            if view == "Longitudinal":
-                if (freq == "Year-Month") and ("Month" in d.columns):
+                # build time column
+                if freq == "Year-Month" and "Month" in d.columns:
                     d["Year-Month"] = d["Year"].astype(str) + "-" + d["Month"].astype(str).str.zfill(2)
                     time_col = "Year-Month"
                 else:
                     time_col = "Year"
-                group_cols = [time_col, level]
-            else:
-                time_col = None
-                group_cols = [level]
 
-            # aggregate passengers
-            agg_func = "sum" if agg == "sum" else "mean"
-            d = d.groupby(group_cols, as_index=False)["Passengers"].agg(agg_func)
+                # aggregate
+                agg_func = getattr(pd.Series, agg)
+                d = d.groupby([time_col, level], as_index=False)[metric].agg(agg)
 
-            # keep only top-N series
-            if view == "Longitudinal" and time_col:
-                d = (
-                    d
-                    .groupby(time_col, group_keys=False)
-                    .apply(lambda g: g.nlargest(top_n, "Passengers"))
-                    .reset_index(drop=True)
+                # keep top-N by overall sum
+                top_series = (
+                    d.groupby(level)[metric].sum()
+                     .nlargest(top_n)
+                     .index
                 )
-            else:
-                d = d.nlargest(top_n, "Passengers")
+                d = d[d[level].isin(top_series)]
 
-            # plot
-            if time_col:
                 fig = px.line(
                     d,
                     x=time_col,
-                    y="Passengers",
+                    y=metric,
                     color=level,
                     markers=True,
-                    title="Passenger Flow over Time"
+                    title=f"{metric} over Time"
                 )
-            else:
-                fig = px.bar(
-                    d,
-                    x=level,
-                    y="Passengers",
-                    title="Cross-sectional Passenger Volumes"
-                )
-            st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True)
 
-        else:
-            # pure cross-sectional if no Year/Month
+        else:  # Bar plot (cross-section)
             agg   = st.selectbox("Aggregation", ["sum", "mean"], key="desc_agg_cs")
             level = st.selectbox("Group by", ["Origin Airport", "Origin Country Name"], key="desc_level_cs")
             top_n = st.number_input("Top N", min_value=1, max_value=50, value=10, key="desc_n_cs")
 
             d = (
                 df
-                .groupby(level, as_index=False)["Passengers"]
-                .agg("sum" if agg=="sum" else "mean")
-                .nlargest(top_n, "Passengers")
+                .groupby(level, as_index=False)[metric]
+                .agg(agg)
+                .nlargest(top_n, metric)
             )
             fig = px.bar(
                 d,
                 x=level,
-                y="Passengers",
-                title="Cross-sectional Passenger Volumes"
+                y=metric,
+                title=f"Cross-sectional {metric}"
             )
             st.plotly_chart(fig, use_container_width=True)
+
 
     # -- Descriptives → Supply --
     with desc_sup:
