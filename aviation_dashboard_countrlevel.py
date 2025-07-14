@@ -73,7 +73,9 @@ origin_all = sorted(df["Origin Country Name"].unique())
 dest_all   = sorted(df["Destination Country Name"].unique())
 panel_data = "Year" in df.columns
 
+# ----------------------
 # Default policy parameters (so variables exist even in Descriptives mode)
+# ----------------------
 ets_price       = 0.0
 carbon_origin   = []
 carbon_dest     = []
@@ -126,7 +128,9 @@ if mode != "Descriptives":
     st.sidebar.markdown("### Optional: GDP by origin")
     with st.sidebar.expander("Customize GDP growth"):
         for c in origin_all:
-            gdp_by_country[c] = st.slider(f"{c} GDP growth (%)", -5.0, 8.0, global_gdp, 0.1, key=f"gdp_{c}")
+            gdp_by_country[c] = st.slider(
+                f"{c} GDP growth (%)", -5.0, 8.0, global_gdp, 0.1, key=f"gdp_{c}"
+            )
 
 # ----------------------
 # Apply policies to data
@@ -134,12 +138,20 @@ if mode != "Descriptives":
 df["CO2 per pax (kg)"] = df["Distance (km)"] * emission_factor
 df["Carbon cost per pax"] = 0.0
 if mode != "Descriptives" and enable_carbon:
-    mask_c = df["Origin Country Name"].isin(carbon_origin) & df["Destination Country Name"].isin(carbon_dest)
-    df.loc[mask_c, "Carbon cost per pax"] = df.loc[mask_c, "CO2 per pax (kg)"] / 1000 * ets_price * pass_through
+    mask_c = (
+        df["Origin Country Name"].isin(carbon_origin)
+        & df["Destination Country Name"].isin(carbon_dest)
+    )
+    df.loc[mask_c, "Carbon cost per pax"] = (
+        df.loc[mask_c, "CO2 per pax (kg)"] / 1000 * ets_price * pass_through
+    )
 
 df["Air passenger tax per pax"] = 0.0
 if mode != "Descriptives" and enable_tax:
-    mask_t = df["Origin Country Name"].isin(tax_origin) & df["Destination Country Name"].isin(tax_dest)
+    mask_t = (
+        df["Origin Country Name"].isin(tax_origin)
+        & df["Destination Country Name"].isin(tax_dest)
+    )
     df.loc[mask_t, "Air passenger tax per pax"] = air_pass_tax * pass_through
 
 df["New Avg Fare"] = (
@@ -149,9 +161,7 @@ df["New Avg Fare"] = (
 )
 df["Fare Δ (%)"] = (df["New Avg Fare"] / df["Avg. Total Fare(USD)"] - 1) * 100
 
-fare_factor = (
-    (df["New Avg Fare"] / df["Avg. Total Fare(USD)"]) ** price_elast
-)
+fare_factor = (df["New Avg Fare"] / df["Avg. Total Fare(USD)"]) ** price_elast
 df["GDP Growth (%)"]    = df["Origin Country Name"].map(gdp_by_country).fillna(global_gdp)
 df["GDP Growth Factor"] = (1 + df["GDP Growth (%)"]/100) ** gdp_elast
 
@@ -219,6 +229,7 @@ if mode == "Descriptives":
                     markers=True, title=f"{metric} over Time"
                 )
                 st.plotly_chart(fig, use_container_width=True)
+
         else:
             agg   = st.selectbox("Aggregation", ["sum", "mean"], key="desc_agg_cs")
             level = st.selectbox("Group by", ["Origin Airport", "Origin Country Name"], key="desc_level_cs")
@@ -241,8 +252,10 @@ if mode == "Descriptives":
 
 elif mode == "Simulation":
     sub1, sub2 = st.tabs(["Direct effects", "Catalytic effects"])
+
     with sub1:
         tab_sim_me, tab_sim_sup = st.tabs(["Market Equilibrium", "Supply"])
+
         with tab_sim_me:
             st.subheader("📊 Airport-Pair Passenger Results")
             st.dataframe(df[[
@@ -320,19 +333,27 @@ elif mode == "Simulation":
                 cents = pd.concat([orig,dest],ignore_index=True).dropna(subset=["Lat","Lon"])\
                          .groupby("Country",as_index=False)[["Lat","Lon"]].mean()
                 ab = df[["Origin Country Name","Destination Country Name","Passengers","Passengers after policy"]].copy()
-                ab["A"] = np.where(ab["Origin Country Name"]<ab["Destination Country Name"],
-                                   ab["Origin Country Name"], ab["Destination Country Name"])
-                ab["B"] = np.where(ab["Origin Country Name"]<ab["Destination Country Name"],
-                                   ab["Destination Country Name"], ab["Origin Country Name"])
-                pa = ab.groupby(["A","B"],as_index=False).agg(
+                ab["A"] = np.where(
+                    ab["Origin Country Name"] < ab["Destination Country Name"],
+                    ab["Origin Country Name"],
+                    ab["Destination Country Name"]
+                )
+                ab["B"] = np.where(
+                    ab["Origin Country Name"] < ab["Destination Country Name"],
+                    ab["Destination Country Name"],
+                    ab["Origin Country Name"]
+                )
+                pa = ab.groupby(["A","B"], as_index=False).agg(
                     Passengers=("Passengers","sum"),
                     After=("Passengers after policy","sum")
                 )
-                pa["Δ (%)"] = (pa["After"]/pa["Passengers"]-1)*100
-                pa = pa.merge(cents,left_on="A",right_on="Country").rename(
-                    columns={"Lat":"A Lat","Lon":"A Lon"}).drop(columns="Country")
-                pa = pa.merge(cents,left_on="B",right_on="Country").rename(
-                    columns{"Lat":"B Lat","Lon":"B Lon"}).drop(columns="Country")
+                pa["Δ (%)"] = (pa["After"]/pa["Passengers"] - 1) * 100
+                pa = pa.merge(cents, left_on="A", right_on="Country") \
+                       .rename(columns={"Lat":"A Lat","Lon":"A Lon"}) \
+                       .drop(columns="Country")
+                pa = pa.merge(cents, left_on="B", right_on="Country") \
+                       .rename(columns={"Lat":"B Lat","Lon":"B Lon"}) \
+                       .drop(columns="Country")
                 cfg = {
                   "version":"v1","config":{
                     "visState":{"filters":[],"layers":[{
