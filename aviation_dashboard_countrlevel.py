@@ -251,18 +251,14 @@ if mode == "Descriptives":
         import plotly.io as pio                  # part of plotly
         import streamlit.components.v1 as comp   # part of streamlit
         
+       # ── Sankey: Passenger Flows by Year ──
         if "Year" in df.columns:
             st.markdown("---")
             st.subheader("🔀 Sankey: Passenger Flows by Year")
         
             # 1) pick year & granularity
             years = sorted(df["Year"].unique())
-            default_idx = len(years) - 1
-            year = st.selectbox(
-                "Year",
-                years,
-                index=default_idx
-            )
+            year  = st.selectbox("Year", years, index=len(years)-1)
         
             agg_level = st.selectbox("Aggregation", ["Airport", "Country"])
             origin_col = "Origin Airport" if agg_level=="Airport" else "Origin Country Name"
@@ -280,31 +276,35 @@ if mode == "Descriptives":
             )
         
             # 3) aggregate & filter
-            dfy = df[df["Year"] == year].dropna(subset=[ocol, dcol])
-            flows = (dfy.groupby([ocol, dcol], as_index=False)["Passengers"].sum())
-            flows = flows[flows[ocol].isin(selected)]
+            df_year = df[df["Year"] == year].dropna(subset=[origin_col, dest_col])
+            flows   = (
+                df_year
+                .groupby([origin_col, dest_col], as_index=False)["Passengers"]
+                .sum()
+            )
+            flows = flows[flows[origin_col].isin(selected_origins)]
         
-            # 4) grab each origin’s top dests
+            # 4) pick each origin’s top destinations
             pieces = []
-            for o in selected:
-                sub = flows[flows[ocol]==o]
+            for orig in selected_origins:
+                sub = flows[flows[origin_col] == orig]
                 if not sub.empty:
                     pieces.append(sub.nlargest(top_n_dest, "Passengers"))
             flows = pd.concat(pieces, ignore_index=True) if pieces else pd.DataFrame()
         
-            # 5) build labels & indices
+            # 5) build nodes & indices
             labels = list(dict.fromkeys(
-                flows[ocol].tolist() + flows[dcol].tolist()
+                flows[origin_col].tolist() + flows[dest_col].tolist()
             ))
-            idx    = {lab:i for i,lab in enumerate(labels)}
-            src    = flows[ocol].map(idx).tolist()
-            tgt    = flows[dcol].map(idx).tolist()
+            idx    = {lab:i for i, lab in enumerate(labels)}
+            src    = flows[origin_col].map(idx).tolist()
+            tgt    = flows[dest_col].map(idx).tolist()
             vals   = flows["Passengers"].tolist()
         
             if not vals:
-                st.warning("No flows to display — try different selections.")
+                st.warning("No flows to display—check your selections or try another year.")
             else:
-                # 6) raw figure dict with larger fonts
+                # 6) raw figure dict with bumped fonts
                 fig_dict = {
                     "data": [{
                         "type": "sankey",
@@ -313,7 +313,7 @@ if mode == "Descriptives":
                             "pad": 20,
                             "thickness": 30,
                             "label": labels,
-                            "font": {"size": 20}    # ← bigger node labels
+                            "font": {"size": 20}
                         },
                         "link": {
                             "source": src,
@@ -322,23 +322,19 @@ if mode == "Descriptives":
                         }
                     }],
                     "layout": {
-                        "title": f"Passenger Flows in {year} ({agg}-level)",
-                        "font": {"size": 18}       # ← bigger overall text
+                        "title": f"Passenger Flows in {year} ({agg_level}-level)",
+                        "font": {"size": 18}
                     }
                 }
         
-                # 7) render to standalone HTML/JS and embed
-                sankey_html = pio.to_html(
-                    fig_dict,
-                    include_plotlyjs="cdn",
-                    full_html=False
-                )
-                comp.html(sankey_html, height=600, scrolling=True)
+                # 7) draw it
+                st.plotly_chart(fig_dict, use_container_width=True)
         
         else:
             st.info("Add a `Year` column to your data to enable the Sankey diagram.")
         
-        
+                
+                
 
         
         
