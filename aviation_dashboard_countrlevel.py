@@ -251,22 +251,33 @@ if mode == "Descriptives":
         import plotly.io as pio                  # part of plotly
         import streamlit.components.v1 as comp   # part of streamlit
         
-        # ── Sankey: Passenger Flows by Year ──
         if "Year" in df.columns:
             st.markdown("---")
             st.subheader("🔀 Sankey: Passenger Flows by Year")
         
-            # 1) Year & aggregation level
-            year = st.selectbox("Year", sorted(df["Year"].unique()), index=-1)
-            agg = st.selectbox("Aggregation", ["Airport", "Country"])
-            ocol = "Origin Airport" if agg=="Airport" else "Origin Country Name"
-            dcol = "Destination Airport" if agg=="Airport" else "Destination Country Name"
+            # 1) pick year & granularity
+            years = sorted(df["Year"].unique())
+            default_idx = len(years) - 1
+            year = st.selectbox(
+                "Year",
+                years,
+                index=default_idx
+            )
+        
+            agg_level = st.selectbox("Aggregation", ["Airport", "Country"])
+            origin_col = "Origin Airport" if agg_level=="Airport" else "Origin Country Name"
+            dest_col   = "Destination Airport" if agg_level=="Airport" else "Destination Country Name"
         
             # 2) pick origins & N‑dests
-            origins = sorted(df[ocol].unique())
-            selected = st.multiselect(f"Select {agg.lower()}s of origin", origins,
-                                      default=origins[:5])
-            top_n_dest = st.number_input("Top N destinations per origin", 1, 50, 5, 1)
+            all_origins = sorted(df[origin_col].unique())
+            selected_origins = st.multiselect(
+                f"Select {agg_level.lower()}s of origin",
+                all_origins,
+                default=all_origins[:5]
+            )
+            top_n_dest = st.number_input(
+                "Top N destinations per origin", 1, 50, 5, 1
+            )
         
             # 3) aggregate & filter
             dfy = df[df["Year"] == year].dropna(subset=[ocol, dcol])
