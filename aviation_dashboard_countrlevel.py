@@ -247,7 +247,7 @@ if mode == "Descriptives":
             st.plotly_chart(fig, use_container_width=True)
 
     # Sankey: change in passenger flows between two years
-       if "Year" in df.columns:
+        if "Year" in df.columns:
             st.markdown("---")
             st.subheader("🔀 Sankey: Passenger Flows by Year")
         
@@ -330,8 +330,8 @@ if mode == "Descriptives":
                 # 8) hand the JSON straight to Streamlit
                 st.plotly_chart(fig_dict, use_container_width=True)
 
-    else:
-        st.info("Add a `Year` column to your data to enable the Sankey diagram.")
+        else:
+            st.info("Add a `Year` column to your data to enable the Sankey diagram.")
 
         
         
