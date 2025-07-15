@@ -313,7 +313,8 @@ if mode == "Descriptives":
                         "node": {
                             "pad": 20,
                             "thickness": 30,
-                            "label": labels
+                            "label": labels,
+                            "font": {"size": 20}    
                         },
                         "link": {
                             "source": src,
