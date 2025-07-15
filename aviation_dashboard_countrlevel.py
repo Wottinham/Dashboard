@@ -253,16 +253,16 @@ if mode == "Descriptives":
             st.subheader("🔀 Sankey: Passenger Flows by Year")
         
             # 1) Year & aggregation
-            years = sorted(df["Year"].unique())
-            year  = st.selectbox("Year", years, index=len(years)-1)
-            agg   = st.selectbox("Aggregation", ["Airport", "Country"])
-            origin_col = "Origin Airport" if agg=="Airport" else "Origin Country Name"
-            dest_col   = "Destination Airport" if agg=="Airport" else "Destination Country Name"
+            years      = sorted(df["Year"].unique())
+            year       = st.selectbox("Year", years, index=len(years)-1)
+            agg_level  = st.selectbox("Aggregation", ["Airport", "Country"])
+            origin_col = "Origin Airport" if agg_level=="Airport" else "Origin Country Name"
+            dest_col   = "Destination Airport" if agg_level=="Airport" else "Destination Country Name"
         
-            # 2) choose origins & how many dests per origin
-            all_origins = sorted(df[origin_col].dropna().unique())
+            # 2) pick origins & N‑dests
+            all_origins      = sorted(df[origin_col].dropna().unique())
             selected_origins = st.multiselect(
-                f"Select {agg.lower()}s of origin",
+                f"Select {agg_level.lower()}s of origin",
                 all_origins,
                 default=all_origins[:5]
             )
@@ -270,27 +270,27 @@ if mode == "Descriptives":
                 "Top N destinations per origin", 1, 50, 5, 1
             )
         
-            # 3) sum and filter
-            dfy = (
+            # 3) aggregate & filter flows
+            df_year = (
                 df[df["Year"] == year]
                 .dropna(subset=[origin_col, dest_col])
                 .groupby([origin_col, dest_col], as_index=False)["Passengers"]
                 .sum()
             )
-            dfy = dfy[dfy[origin_col].isin(selected_origins)]
+            df_year = df_year[df_year[origin_col].isin(selected_origins)]
         
-            # 4) per‑origin top N dests
-            pieces = []
+            # 4) pick each origin’s top destinations
+            parts = []
             for orig in selected_origins:
-                sub = dfy[dfy[origin_col] == orig]
+                sub = df_year[df_year[origin_col] == orig]
                 if not sub.empty:
-                    pieces.append(sub.nlargest(top_n_dest, "Passengers"))
-            flows = pd.concat(pieces, ignore_index=True) if pieces else pd.DataFrame()
+                    parts.append(sub.nlargest(top_n_dest, "Passengers"))
+            flows = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
         
             if flows.empty:
-                st.warning("No data—adjust your selections or try another year.")
+                st.warning("No flows to display—adjust your selections or try another year.")
             else:
-                # 5) build node labels & indices
+                # 5) node labels & indices
                 labels = list(dict.fromkeys(
                     flows[origin_col].tolist() + flows[dest_col].tolist()
                 ))
@@ -299,14 +299,12 @@ if mode == "Descriptives":
                 tgt    = flows[dest_col].map(idx).tolist()
                 vals   = flows["Passengers"].tolist()
         
-                # 6) plot with go.Sankey
+                # 6) go.Sankey with only validator‑safe props
                 sankey = go.Sankey(
-                    arrangement="snap",
                     node=dict(
                         label=labels,
-                        pad=20,
-                        thickness=30,
-                        font=dict(size=20)
+                        pad=15,
+                        thickness=20
                     ),
                     link=dict(
                         source=src,
@@ -315,16 +313,20 @@ if mode == "Descriptives":
                     )
                 )
                 fig = go.Figure(data=[sankey])
+        
+                # 7) bump up all text via layout.font
                 fig.update_layout(
-                    title_text=f"Passenger Flows in {year} ({agg}-level)",
-                    font_size=18
+                    title_text=f"Passenger Flows in {year} ({agg_level}-level)",
+                    font=dict(size=18)
                 )
+        
                 st.plotly_chart(fig, use_container_width=True)
         
         else:
             st.info("Add a `Year` column to your data to enable the Sankey diagram.")
         
-                        
+                
+                                
                                 
                                 
                                 
