@@ -247,88 +247,88 @@ if mode == "Descriptives":
             st.plotly_chart(fig, use_container_width=True)
 
     # Sankey: change in passenger flows between two years
-     if "Year" in df.columns:
-    st.markdown("---")
-    st.subheader("🔀 Sankey: Passenger Flows by Year")
-
-    # 1) select a single year
-    year = st.selectbox(
-        "Select Year",
-        sorted(df["Year"].unique()),
-        index=len(df["Year"].unique())-1,
-        key="sankey_year"
-    )
-
-    # 2) choose aggregation level
-    agg_level = st.selectbox(
-        "Aggregation Level",
-        ["Airport", "Country"],
-        key="sankey_level"
-    )
-    origin_col = "Origin Airport" if agg_level=="Airport" else "Origin Country Name"
-    dest_col   = "Destination Airport" if agg_level=="Airport" else "Destination Country Name"
-
-    # 3) top‐N origins and destinations
-    col1, col2 = st.columns(2)
-    with col1:
-        top_n_orig = st.number_input(
-            "Top N origins",
-            min_value=1, max_value=50, value=5, step=1,
-            key="sankey_topn_orig"
+if "Year" in df.columns:
+        st.markdown("---")
+        st.subheader("🔀 Sankey: Passenger Flows by Year")
+    
+        # 1) select a single year
+        year = st.selectbox(
+            "Select Year",
+            sorted(df["Year"].unique()),
+            index=len(df["Year"].unique())-1,
+            key="sankey_year"
         )
-    with col2:
-        top_n_dest = st.number_input(
-            "Top N destinations",
-            min_value=1, max_value=50, value=5, step=1,
-            key="sankey_topn_dest"
+    
+        # 2) choose aggregation level
+        agg_level = st.selectbox(
+            "Aggregation Level",
+            ["Airport", "Country"],
+            key="sankey_level"
         )
-
-    # 4) aggregate flows
-    df_year = df[df["Year"] == year]
-    flows = (
-        df_year
-        .groupby([origin_col, dest_col], as_index=False)["Passengers"]
-        .sum()
-    )
-
-    # 5) filter top origins and dests by total flow
-    top_origins = (
-        flows.groupby(origin_col)["Passengers"]
-        .sum()
-        .nlargest(top_n_orig)
-        .index
-    )
-    top_dests = (
-        flows.groupby(dest_col)["Passengers"]
-        .sum()
-        .nlargest(top_n_dest)
-        .index
-    )
-    flows = flows[
-        flows[origin_col].isin(top_origins) &
-        flows[dest_col].isin(top_dests)
-    ]
-
-    # 6) build Sankey inputs
-    nodes = list(top_origins) + list(top_dests)
-    # ensure unique and preserve order
-    nodes = list(dict.fromkeys(nodes))
-    idx = {name: i for i, name in enumerate(nodes)}
-
-    sources = flows[origin_col].map(idx).tolist()
-    targets = flows[dest_col].map(idx).tolist()
-    values  = flows["Passengers"].tolist()
-
-    # 7) draw Sankey
-    fig = go.Figure(go.Sankey(
-        node=dict(label=nodes, pad=15, thickness=20),
-        link=dict(source=sources, target=targets, value=values)
-    ))
-    fig.update_layout(
-        title_text=f"Passenger Flows in {year} ({agg_level}-level)",
-        font_size=10
-    )
-    st.plotly_chart(fig, use_container_width=True)
+        origin_col = "Origin Airport" if agg_level=="Airport" else "Origin Country Name"
+        dest_col   = "Destination Airport" if agg_level=="Airport" else "Destination Country Name"
+    
+        # 3) top‐N origins and destinations
+        col1, col2 = st.columns(2)
+        with col1:
+            top_n_orig = st.number_input(
+                "Top N origins",
+                min_value=1, max_value=50, value=5, step=1,
+                key="sankey_topn_orig"
+            )
+        with col2:
+            top_n_dest = st.number_input(
+                "Top N destinations",
+                min_value=1, max_value=50, value=5, step=1,
+                key="sankey_topn_dest"
+            )
+    
+        # 4) aggregate flows
+        df_year = df[df["Year"] == year]
+        flows = (
+            df_year
+            .groupby([origin_col, dest_col], as_index=False)["Passengers"]
+            .sum()
+        )
+    
+        # 5) filter top origins and dests by total flow
+        top_origins = (
+            flows.groupby(origin_col)["Passengers"]
+            .sum()
+            .nlargest(top_n_orig)
+            .index
+        )
+        top_dests = (
+            flows.groupby(dest_col)["Passengers"]
+            .sum()
+            .nlargest(top_n_dest)
+            .index
+        )
+        flows = flows[
+            flows[origin_col].isin(top_origins) &
+            flows[dest_col].isin(top_dests)
+        ]
+    
+        # 6) build Sankey inputs
+        nodes = list(top_origins) + list(top_dests)
+        # ensure unique and preserve order
+        nodes = list(dict.fromkeys(nodes))
+        idx = {name: i for i, name in enumerate(nodes)}
+    
+        sources = flows[origin_col].map(idx).tolist()
+        targets = flows[dest_col].map(idx).tolist()
+        values  = flows["Passengers"].tolist()
+    
+        # 7) draw Sankey
+        fig = go.Figure(go.Sankey(
+            node=dict(label=nodes, pad=15, thickness=20),
+            link=dict(source=sources, target=targets, value=values)
+        ))
+        fig.update_layout(
+            title_text=f"Passenger Flows in {year} ({agg_level}-level)",
+            font_size=10
+        )
+        st.plotly_chart(fig, use_container_width=True)
 else:
     st.info("Add a `Year` column to your data to enable the Sankey diagram.")
 
