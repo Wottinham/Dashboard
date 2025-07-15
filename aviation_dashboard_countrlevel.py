@@ -248,6 +248,8 @@ if mode == "Descriptives":
 
     # Sankey: change in passenger flows between two years
         # ── Sankey: Passenger Flows by Year ──
+        import plotly.express as px  # you already have this at the top
+
         if "Year" in df.columns:
             st.markdown("---")
             st.subheader("🔀 Sankey: Passenger Flows by Year")
@@ -259,7 +261,7 @@ if mode == "Descriptives":
             origin_col = "Origin Airport" if agg_level=="Airport" else "Origin Country Name"
             dest_col   = "Destination Airport" if agg_level=="Airport" else "Destination Country Name"
         
-            # 2) pick origins & N‑dests
+            # 2) pick origins & top‑N dests
             all_origins      = sorted(df[origin_col].dropna().unique())
             selected_origins = st.multiselect(
                 f"Select {agg_level.lower()}s of origin",
@@ -270,12 +272,12 @@ if mode == "Descriptives":
                 "Top N destinations per origin", 1, 50, 5, 1
             )
         
-            # 3) aggregate & filter flows
+            # 3) aggregate & filter
             df_year = (
                 df[df["Year"] == year]
-                .dropna(subset=[origin_col, dest_col])
-                .groupby([origin_col, dest_col], as_index=False)["Passengers"]
-                .sum()
+                  .dropna(subset=[origin_col, dest_col])
+                  .groupby([origin_col, dest_col], as_index=False)["Passengers"]
+                  .sum()
             )
             df_year = df_year[df_year[origin_col].isin(selected_origins)]
         
@@ -290,7 +292,7 @@ if mode == "Descriptives":
             if flows.empty:
                 st.warning("No flows to display—adjust your selections or try another year.")
             else:
-                # 5) node labels & indices
+                # 5) build node labels & indices
                 labels = list(dict.fromkeys(
                     flows[origin_col].tolist() + flows[dest_col].tolist()
                 ))
@@ -299,8 +301,18 @@ if mode == "Descriptives":
                 tgt    = flows[dest_col].map(idx).tolist()
                 vals   = flows["Passengers"].tolist()
         
-                # 6) go.Sankey with only validator‑safe props
+                # 6) pick a palette and map each origin to a color
+                palette      = px.colors.qualitative.Plotly
+                unique_orig  = list(dict.fromkeys(flows[origin_col].tolist()))
+                color_map    = {
+                    orig: palette[i % len(palette)]
+                    for i, orig in enumerate(unique_orig)
+                }
+                link_colors = [color_map[o] for o in flows[origin_col]]
+        
+                # 7) plot with go.Sankey, passing link.color
                 sankey = go.Sankey(
+                    arrangement="snap",
                     node=dict(
                         label=labels,
                         pad=15,
@@ -309,23 +321,21 @@ if mode == "Descriptives":
                     link=dict(
                         source=src,
                         target=tgt,
-                        value=vals
+                        value=vals,
+                        color=link_colors
                     )
                 )
                 fig = go.Figure(data=[sankey])
-        
-                # 7) bump up all text via layout.font
                 fig.update_layout(
                     title_text=f"Passenger Flows in {year} ({agg_level}-level)",
                     font=dict(size=18)
                 )
-        
                 st.plotly_chart(fig, use_container_width=True)
         
         else:
             st.info("Add a `Year` column to your data to enable the Sankey diagram.")
         
-                
+                        
                                 
                                 
                                 
