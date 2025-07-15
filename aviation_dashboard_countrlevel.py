@@ -251,108 +251,83 @@ if mode == "Descriptives":
         import plotly.io as pio                  # part of plotly
         import streamlit.components.v1 as comp   # part of streamlit
         
-       # ── Sankey: Passenger Flows by Year ──
-        # ── Approximate Sankey with Scatter traces ──
+               # ── Sankey: Passenger Flows by Year ──
+                # ── Approximate Sankey with Scatter traces ──
         if "Year" in df.columns:
             st.markdown("---")
-            st.subheader("🔀 Sankey‑style Flows by Year")
+            st.subheader("🔀 Sankey: Passenger Flows by Year")
         
-            # 1) Year & aggregation
+            # 1) pick year & granularity
             years = sorted(df["Year"].unique())
             year  = st.selectbox("Year", years, index=len(years)-1)
             agg   = st.selectbox("Aggregation", ["Airport", "Country"])
-            ocol  = "Origin Airport" if agg=="Airport" else "Origin Country Name"
-            dcol  = "Destination Airport" if agg=="Airport" else "Destination Country Name"
+            origin_col = "Origin Airport" if agg=="Airport" else "Origin Country Name"
+            dest_col   = "Destination Airport" if agg=="Airport" else "Destination Country Name"
         
-            # 2) pick origins & per‑origin N‑dests
-            origins_all    = sorted(df[ocol].dropna().unique())
-            sel_origins    = st.multiselect(f"Select {agg.lower()}s of origin",
-                                             origins_all,
-                                             default=origins_all[:5])
-            top_n_dest     = st.number_input("Top N destinations per origin", 1, 50, 5, 1)
+            # 2) select origins & per-origin N‑dests
+            all_origins = sorted(df[origin_col].dropna().unique())
+            selected_origins = st.multiselect(
+                f"Select {agg.lower()}s of origin",
+                all_origins,
+                default=all_origins[:5]
+            )
+            top_n_dest = st.number_input("Top N destinations per origin", 1, 50, 5, 1)
         
             # 3) aggregate flows
-            fy = (
+            dfy = (
                 df[df["Year"] == year]
-                .dropna(subset=[ocol, dcol])
-                .groupby([ocol, dcol], as_index=False)["Passengers"]
+                .dropna(subset=[origin_col, dest_col])
+                .groupby([origin_col, dest_col], as_index=False)
+                ["Passengers"]
                 .sum()
             )
-            fy = fy[fy[ocol].isin(sel_origins)]
+            dfy = dfy[dfy[origin_col].isin(selected_origins)]
         
-            # 4) per‑origin top destinations
+            # 4) top‑N dest per origin
             pieces = []
-            for o in sel_origins:
-                sub = fy[fy[ocol] == o]
+            for o in selected_origins:
+                sub = dfy[dfy[origin_col] == o]
                 if not sub.empty:
                     pieces.append(sub.nlargest(top_n_dest, "Passengers"))
             flows = pd.concat(pieces, ignore_index=True) if pieces else pd.DataFrame()
         
             if flows.empty:
-                st.warning("No data to show — adjust your selections.")
+                st.warning("No flows to display—adjust your selections or try another year.")
             else:
-                # 5) compute y‑positions
-                origins = list(dict.fromkeys(flows[ocol]))
-                dests   = list(dict.fromkeys(flows[dcol]))
-                n_o, n_d = len(origins), len(dests)
-                y_o = {o: 1 - i/(n_o-1 if n_o>1 else 1) for i,o in enumerate(origins)}
-                y_d = {d: 1 - i/(n_d-1 if n_d>1 else 1) for i,d in enumerate(dests)}
-        
-                max_val   = flows["Passengers"].max()
-                max_width = 30   # max line thickness
-                font_node = 18   # node label font size
-        
-                # 6) build figure
-                fig = go.Figure()
-        
-                # — draw each flow as a line
-                for _, row in flows.iterrows():
-                    o, d, val = row[ocol], row[dcol], row["Passengers"]
-                    w = max(1, (val/max_val) * max_width)
-                    fig.add_trace(go.Scatter(
-                        x=[0, 1],
-                        y=[y_o[o], y_d[d]],
-                        mode="lines",
-                        line=dict(width=w, color="rgba(50,50,150,0.4)"),
-                        hoverinfo="text",
-                        text=f"{o} → {d}: {val:,} pax"
-                    ))
-        
-                # — draw origin labels
-                fig.add_trace(go.Scatter(
-                    x=[0]*n_o,
-                    y=[y_o[o] for o in origins],
-                    mode="text",
-                    text=origins,
-                    textposition="middle left",
-                    textfont=dict(size=font_node)
+                # 5) build label/index lists
+                labels = list(dict.fromkeys(
+                    flows[origin_col].tolist() + flows[dest_col].tolist()
                 ))
+                idx    = {lab: i for i, lab in enumerate(labels)}
+                src    = flows[origin_col].map(idx).tolist()
+                tgt    = flows[dest_col].map(idx).tolist()
+                vals   = flows["Passengers"].tolist()
         
-                # — draw destination labels
-                fig.add_trace(go.Scatter(
-                    x=[1]*n_d,
-                    y=[y_d[d] for d in dests],
-                    mode="text",
-                    text=dests,
-                    textposition="middle right",
-                    textfont=dict(size=font_node)
-                ))
-        
-                # 7) polish layout
-                fig.update_xaxes(visible=False)
-                fig.update_yaxes(visible=False)
-                fig.update_layout(
-                    title=f"Passenger Flows in {year} ({agg}-level)",
-                    margin=dict(l=200, r=200, t=50, b=50),
-                    showlegend=False
+                # 6) minimal go.Sankey call
+                sankey = go.Sankey(
+                    arrangement="snap",
+                    node=dict(
+                        label=labels,
+                        font=dict(size=20)       # ↑ big node labels
+                    ),
+                    link=dict(
+                        source=src,
+                        target=tgt,
+                        value=vals
+                    )
                 )
-        
+                fig = go.Figure(data=[sankey])
+                fig.update_layout(
+                    title_text=f"Passenger Flows in {year} ({agg}-level)",
+                    font_size=18               # ↑ big overall text
+                )
                 st.plotly_chart(fig, use_container_width=True)
         
         else:
             st.info("Add a `Year` column to your data to enable the Sankey diagram.")
         
                 
+                        
                         
                         
 
