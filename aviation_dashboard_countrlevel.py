@@ -308,7 +308,11 @@ if mode == "Descriptives":
                     orig: palette[i % len(palette)]
                     for i, orig in enumerate(unique_orig)
                 }
-                link_colors = [color_map[o] for o in flows[origin_col]]
+                link_colors = []
+                for orig in flows[origin_col]:
+                    hexc = color_map[orig].lstrip("#")
+                    r, g, b = (int(hexc[i:i+2], 16) for i in (0, 2, 4))
+                    link_colors.append(f"rgba({r},{g},{b},0.4)")  # 0.4 opacity
         
                 # 7) plot with go.Sankey, passing link.color
                 sankey = go.Sankey(
