@@ -248,68 +248,52 @@ if mode == "Descriptives":
 
     # Sankey: change in passenger flows between two years
         # ── Sankey: Passenger Flows by Year ──
+        import plotly.io as pio                  # part of plotly
+        import streamlit.components.v1 as comp   # part of streamlit
+        
+        # ── Sankey: Passenger Flows by Year ──
         if "Year" in df.columns:
             st.markdown("---")
             st.subheader("🔀 Sankey: Passenger Flows by Year")
         
-            # 1) pick year & granularity
-            year = st.selectbox(
-                "Year",
-                sorted(df["Year"].unique()),
-                index=len(df["Year"].unique())-1
-            )
-            agg_level = st.selectbox("Aggregation", ["Airport", "Country"])
-            origin_col = "Origin Airport" if agg_level=="Airport" else "Origin Country Name"
-            dest_col   = "Destination Airport" if agg_level=="Airport" else "Destination Country Name"
+            # 1) Year & aggregation level
+            year = st.selectbox("Year", sorted(df["Year"].unique()), index=-1)
+            agg = st.selectbox("Aggregation", ["Airport", "Country"])
+            ocol = "Origin Airport" if agg=="Airport" else "Origin Country Name"
+            dcol = "Destination Airport" if agg=="Airport" else "Destination Country Name"
         
-            # 2) origin picker (multi-select) & top‑N destinations per origin
-            all_origins = sorted(df[origin_col].unique())
-            selected_origins = st.multiselect(
-                f"Select {agg_level.lower()}s of origin",
-                options=all_origins,
-                default=all_origins[:5]  # pick first 5 by default
-            )
+            # 2) pick origins & N‑dests
+            origins = sorted(df[ocol].unique())
+            selected = st.multiselect(f"Select {agg.lower()}s of origin", origins,
+                                      default=origins[:5])
+            top_n_dest = st.number_input("Top N destinations per origin", 1, 50, 5, 1)
         
-            top_n_dest = st.number_input(
-                "Top N destinations per origin",
-                min_value=1, max_value=50, value=5, step=1
-            )
+            # 3) aggregate & filter
+            dfy = df[df["Year"] == year].dropna(subset=[ocol, dcol])
+            flows = (dfy.groupby([ocol, dcol], as_index=False)["Passengers"].sum())
+            flows = flows[flows[ocol].isin(selected)]
         
-            # 3) sum up flows for that year
-            df_year = df[df["Year"] == year].dropna(subset=[origin_col, dest_col])
-            flows   = (
-                df_year
-                .groupby([origin_col, dest_col], as_index=False)["Passengers"]
-                .sum()
-            )
-        
-            # 4) filter by your selected origins
-            flows = flows[flows[origin_col].isin(selected_origins)]
-        
-            # 5) for each chosen origin, pick its top destinations
-            parts = []
-            for o in selected_origins:
-                sub = flows[flows[origin_col] == o]
+            # 4) grab each origin’s top dests
+            pieces = []
+            for o in selected:
+                sub = flows[flows[ocol]==o]
                 if not sub.empty:
-                    parts.append(sub.nlargest(top_n_dest, "Passengers"))
-            if parts:
-                flows = pd.concat(parts, ignore_index=True)
-            else:
-                flows = pd.DataFrame(columns=[origin_col, dest_col, "Passengers"])
+                    pieces.append(sub.nlargest(top_n_dest, "Passengers"))
+            flows = pd.concat(pieces, ignore_index=True) if pieces else pd.DataFrame()
         
-            # 6) build node list & indices
+            # 5) build labels & indices
             labels = list(dict.fromkeys(
-                flows[origin_col].tolist() + flows[dest_col].tolist()
+                flows[ocol].tolist() + flows[dcol].tolist()
             ))
-            idx    = {label: i for i, label in enumerate(labels)}
-            src    = flows[origin_col].map(idx).tolist()
-            tgt    = flows[dest_col].map(idx).tolist()
+            idx    = {lab:i for i,lab in enumerate(labels)}
+            src    = flows[ocol].map(idx).tolist()
+            tgt    = flows[dcol].map(idx).tolist()
             vals   = flows["Passengers"].tolist()
         
             if not vals:
-                st.warning("No flows to display—check your origin selections or increase the year’s data.")
+                st.warning("No flows to display — try different selections.")
             else:
-                # 7) raw dict‐style Sankey + layout
+                # 6) raw figure dict with larger fonts
                 fig_dict = {
                     "data": [{
                         "type": "sankey",
@@ -318,7 +302,7 @@ if mode == "Descriptives":
                             "pad": 20,
                             "thickness": 30,
                             "label": labels,
-                            "font": {"size": 18}     # bump this up for readability
+                            "font": {"size": 20}    # ← bigger node labels
                         },
                         "link": {
                             "source": src,
@@ -327,17 +311,23 @@ if mode == "Descriptives":
                         }
                     }],
                     "layout": {
-                        "title": f"Passenger Flows in {year} ({agg_level}-level)",
-                        "font": {"size": 16}
+                        "title": f"Passenger Flows in {year} ({agg}-level)",
+                        "font": {"size": 18}       # ← bigger overall text
                     }
                 }
         
-                # 8) hand the JSON straight to Streamlit
-                st.plotly_chart(fig_dict, use_container_width=True)
+                # 7) render to standalone HTML/JS and embed
+                sankey_html = pio.to_html(
+                    fig_dict,
+                    include_plotlyjs="cdn",
+                    full_html=False
+                )
+                comp.html(sankey_html, height=600, scrolling=True)
         
         else:
             st.info("Add a `Year` column to your data to enable the Sankey diagram.")
-
+        
+        
 
         
         
