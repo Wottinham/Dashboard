@@ -313,8 +313,7 @@ if mode == "Descriptives":
                         "node": {
                             "pad": 20,
                             "thickness": 30,
-                            "label": labels,
-                            "font": {"size": 20}    
+                            "label": labels
                         },
                         "link": {
                             "source": src,
@@ -324,7 +323,7 @@ if mode == "Descriptives":
                     }],
                     "layout": {
                         "title": f"Passenger Flows in {year} ({agg_level}-level)",
-                        "font": {"size": 12}
+                        "font": {"size": 15}
                     }
                 }
         
