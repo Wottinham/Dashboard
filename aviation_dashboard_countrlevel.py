@@ -539,7 +539,8 @@ elif mode == "Simulation":
                         "land": True
                       }
                     }
-                  }   
+                  } 
+                }   
                 map1 = KeplerGl(height=1000, width=1900, data={"pairs": pa}, config=cfg)
                 html = map1._repr_html_()
                 if isinstance(html, bytes):
