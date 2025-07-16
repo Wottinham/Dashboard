@@ -524,20 +524,9 @@ elif mode == "Simulation":
                     "mapState":{
                       "latitude":cents["Lat"].mean(),
                       "longitude":cents["Lon"].mean(),
-                      "zoom":2.2,"pitch":30
+                      "zoom":3,"pitch":10
                     },
-                    "mapStyle": {
-                      "styleType": "dark",
-                      "topLayerGroups": {},
-                      "visibleLayerGroups": {
-                        "label": True,
-                        "road": False,
-                        "border": True,
-                        "building": False,
-                        "water": True,
-                        "land": True
-                      }
-                    }
+                    "mapStyle": {}
                   } 
                 }   
                 map1 = KeplerGl(height=1000, width=1900, data={"pairs": pa}, config=cfg)
