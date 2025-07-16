@@ -529,7 +529,7 @@ elif mode == "Simulation":
                     "mapStyle":{}
                   }
                 }
-                map1 = KeplerGl(height=800, data={"pairs": pa}, config=cfg)
+                map1 = KeplerGl(height=800, width=1600, data={"pairs": pa}, config=cfg)
                 html = map1._repr_html_()
                 if isinstance(html, bytes):
                     html = html.decode("utf-8")
