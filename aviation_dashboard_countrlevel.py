@@ -26,7 +26,8 @@ def load_dummy_data() -> pd.DataFrame:
     rows = []
     for o in origins:
         for d in dests:
-            if o == d: continue
+            if o == d:
+                continue
             for _ in range(rng.integers(4,7)):
                 rows.append({
                     "Origin Country Name":      o,
@@ -71,10 +72,10 @@ def load_dummy_supply(df: pd.DataFrame) -> pd.DataFrame:
         chosen = rng.choice(airlines, size=n, replace=False)
         for a in chosen:
             rows.append({
-                "Origin Airport":                r["Origin Airport"],
-                "Destination Airport":           r["Destination Airport"],
-                "Operating Airline":             a,
-                "Operating Airline   Capacity":  float(rng.integers(5_000, 200_000)),
+                "Origin Airport":               r["Origin Airport"],
+                "Destination Airport":          r["Destination Airport"],
+                "Operating Airline":            a,
+                "Operating Airline   Capacity": float(rng.integers(5_000, 200_000)),
             })
     return pd.DataFrame(rows)
 
@@ -101,35 +102,42 @@ else:
     st.sidebar.info("No passenger CSV – using dummy data.")
 
 # ----------------------
-# Detect which aggregation levels are present
+# Detect which aggregation levels & fields are present
+# ----------------------
+has_airports   = {"Origin Airport", "Destination Airport"}.issubset(df.columns)
+has_operating  = has_airports and ("Operating Airline" in df.columns)
+has_distance   = "Distance (km)" in df.columns
+
+# ----------------------
+# Validate required columns for country‐level
 # ----------------------
 country_required = {
     "Origin Country Name", "Destination Country Name",
-    "Distance (km)", "Passengers", "Avg. Total Fare(USD)"
+    "Passengers", "Avg. Total Fare(USD)"
 }
-airport_cols = {"Origin Airport", "Destination Airport"}
-
-has_airports   = airport_cols.issubset(df.columns)
-has_operating  = has_airports and ("Operating Airline" in df.columns)
-
-# Validate passenger columns (country‐level always required)
 if not country_required.issubset(df.columns):
-    st.error(f"Passenger CSV missing required columns: {country_required - set(df.columns)}")
+    missing = country_required - set(df.columns)
+    st.error(f"Passenger CSV missing required columns: {missing}")
     st.stop()
 
-# Drop incomplete rows
-df = df.dropna(subset=country_required).reset_index(drop=True)
+# For airport‐level, require airports; for distance‐based metrics, require distance
 if has_airports:
-    df = df.dropna(subset=list(airport_cols)).reset_index(drop=True)
+    df = df.dropna(subset=["Origin Airport", "Destination Airport"])
+    if has_distance:
+        df = df.dropna(subset=["Distance (km)"])
+    else:
+        st.sidebar.warning("No `Distance (km)`—distance‐based metrics disabled.")
 else:
-    st.sidebar.info("No airport columns – airport‐level analyses are disabled.")
+    st.sidebar.info("No airport columns—airport‐level analyses disabled.")
+
+df = df.reset_index(drop=True)
 
 origin_all = sorted(df["Origin Country Name"].unique())
 dest_all   = sorted(df["Destination Country Name"].unique())
 panel_data = "Year" in df.columns
 
 # ----------------------
-# Default policy parameters (so variables exist even in Descriptives mode)
+# Default policy parameters
 # ----------------------
 ets_price       = 0.0
 carbon_origin   = []
@@ -158,16 +166,12 @@ if mode != "Descriptives":
         ets_price = st.sidebar.slider("Carbon price (EUR/tCO₂)", 0, 400, 100, 5)
         carbon_origin = st.sidebar.multiselect("Carbon taxed: Origin countries", origin_all, default=origin_all)
         carbon_dest   = st.sidebar.multiselect("Carbon taxed: Destination countries", dest_all,   default=dest_all)
-    else:
-        ets_price = 0.0
 
     enable_tax = st.sidebar.checkbox("Enable air passenger tax")
     if enable_tax:
         air_pass_tax = st.sidebar.slider("Air Passenger Tax (USD)", 0, 100, 10, 1)
         tax_origin   = st.sidebar.multiselect("Taxed: Origin countries", origin_all, default=origin_all)
         tax_dest     = st.sidebar.multiselect("Taxed: Destination countries", dest_all,   default=dest_all)
-    else:
-        air_pass_tax = 0.0
 
     st.sidebar.markdown("### Parameters")
     pass_through    = st.sidebar.slider("Cost pass-through (%)", 0, 100, 80, 5) / 100
@@ -186,16 +190,21 @@ if mode != "Descriptives":
 # ----------------------
 # Apply policies to data
 # ----------------------
-df["CO2 per pax (kg)"] = df["Distance (km)"] * emission_factor
-df["Carbon cost per pax"] = 0.0
-if mode != "Descriptives" and enable_carbon:
-    mask_c = (
-        df["Origin Country Name"].isin(carbon_origin)
-        & df["Destination Country Name"].isin(carbon_dest)
-    )
-    df.loc[mask_c, "Carbon cost per pax"] = (
-        df.loc[mask_c, "CO2 per pax (kg)"] / 1000 * ets_price * pass_through
-    )
+# CO2 & carbon cost only if distance exists
+if has_distance:
+    df["CO2 per pax (kg)"]    = df["Distance (km)"] * emission_factor
+    df["Carbon cost per pax"] = 0.0
+    if mode != "Descriptives" and enable_carbon:
+        mask_c = (
+            df["Origin Country Name"].isin(carbon_origin)
+            & df["Destination Country Name"].isin(carbon_dest)
+        )
+        df.loc[mask_c, "Carbon cost per pax"] = (
+            df.loc[mask_c, "CO2 per pax (kg)"] / 1000 * ets_price * pass_through
+        )
+else:
+    df["CO2 per pax (kg)"]    = 0.0
+    df["Carbon cost per pax"] = 0.0
 
 df["Air passenger tax per pax"] = 0.0
 if mode != "Descriptives" and enable_tax:
@@ -217,17 +226,14 @@ df["GDP Growth (%)"]    = df["Origin Country Name"].map(gdp_by_country).fillna(g
 df["GDP Growth Factor"] = (1 + df["GDP Growth (%)"]/100) ** gdp_elast
 
 df["Passengers after policy"] = df["Passengers"] * fare_factor * df["GDP Growth Factor"]
-df["Passenger Δ (%)"] = (df["Passengers after policy"] / df["Passengers"] - 1) * 100
+df["Passenger Δ (%)"]         = (df["Passengers after policy"] / df["Passengers"] - 1) * 100
 
 # ----------------------
-# Initialize coords columns
+# Coordinates setup (only if airports exist)
 # ----------------------
 df["Origin Lat"] = np.nan; df["Origin Lon"] = np.nan
 df["Dest Lat"]   = np.nan; df["Dest Lon"]   = np.nan
 
-# ----------------------
-# Load & merge coordinates (only if we have airports)
-# ----------------------
 if has_airports:
     if coord_file:
         try:
@@ -242,8 +248,8 @@ if has_airports:
         coords = load_dummy_coords(df)
         st.sidebar.info("No coords file – using dummy coords.")
 
-    if {"IATA_Code","DecLat","DecLon"}.issubset(coords.columns):
-        cmap = coords.set_index("IATA_Code")[["DecLat","DecLon"]]
+    if {"IATA_Code", "DecLat", "DecLon"}.issubset(coords.columns):
+        cmap = coords.set_index("IATA_Code")[["DecLat", "DecLon"]]
         df["Origin Code"] = df["Origin Airport"].str.partition("-")[0]
         df["Dest Code"]   = df["Destination Airport"].str.partition("-")[0]
         df["Origin Lat"]  = df["Origin Code"].map(cmap["DecLat"])
@@ -262,30 +268,34 @@ if mode == "Descriptives":
     tab_desc_me, tab_desc_sup = st.tabs(["Market Equilibrium", "Supply"])
     with tab_desc_me:
         st.subheader("📈 Descriptive: Passenger Flow")
+
         metric    = st.selectbox("Metric", ["Passengers", "Avg. Total Fare(USD)"], key="desc_metric")
         plot_type = st.selectbox("Plot type", ["Line", "Bar"], key="desc_plot")
-        is_long = ("Year" in df.columns) or ("Month" in df.columns)
+        is_long   = ("Year" in df.columns) or ("Month" in df.columns)
 
-        # Dynamic group‐by levels
+        # build group‐by levels dynamically
+        group_levels = ["Origin Country Name"]
+        if has_airports:
+            group_levels.insert(0, "Origin Airport")
         if has_operating:
-            group_levels = ["Operating Airline", "Origin Airport", "Origin Country Name"]
-        elif has_airports:
-            group_levels = ["Origin Airport", "Origin Country Name"]
-        else:
-            group_levels = ["Origin Country Name"]
+            group_levels.insert(0, "Operating Airline")
 
         if plot_type == "Line":
             if not is_long:
-                st.warning("Data has no Year/Month column – cannot do time series.")
+                st.warning("No Year/Month columns—cannot time‐series.")
             else:
-                freq = st.selectbox("Time frequency", ["Year", "Year-Month"], key="desc_freq")
+                freq  = st.selectbox("Time frequency", ["Year", "Year-Month"], key="desc_freq")
                 agg   = st.selectbox("Aggregation", ["sum", "mean"], key="desc_agg")
                 level = st.selectbox("Group by", group_levels, key="desc_level")
                 top_n = st.number_input("Top N series", 1, 50, 10, key="desc_n")
 
                 d = df.copy()
                 if freq == "Year-Month" and "Month" in d.columns:
-                    d["Year-Month"] = d["Year"].astype(str) + "-" + d["Month"].astype(str).str.zfill(2)
+                    d["Year-Month"] = (
+                        d["Year"].astype(str).str.zfill(4)
+                        + "-"
+                        + d["Month"].astype(str).str.zfill(2)
+                    )
                     time_col = "Year-Month"
                 else:
                     time_col = "Year"
@@ -295,8 +305,12 @@ if mode == "Descriptives":
                 d = d[d[level].isin(top_series)]
 
                 fig = px.line(
-                    d, x=time_col, y=metric, color=level,
-                    markers=True, title=f"{metric} over Time"
+                    d,
+                    x=time_col,
+                    y=metric,
+                    color=level,
+                    markers=True,
+                    title=f"{metric} over Time",
                 )
                 st.plotly_chart(fig, use_container_width=True)
 
@@ -306,10 +320,9 @@ if mode == "Descriptives":
             top_n = st.number_input("Top N", 1, 50, 10, key="desc_n_cs")
 
             d = (
-                df
-                .groupby(level, as_index=False)[metric]
-                .agg(agg)
-                .nlargest(top_n, metric)
+                df.groupby(level, as_index=False)[metric]
+                  .agg(agg)
+                  .nlargest(top_n, metric)
             )
             fig = px.bar(
                 d, x=level, y=metric, title=f"Cross-sectional {metric}"
@@ -321,16 +334,22 @@ if mode == "Descriptives":
             st.markdown("---")
             st.subheader("🔀 Sankey: Passenger Flows by Year")
 
-            years      = sorted(df["Year"].unique())
-            year       = st.selectbox("Year", years, index=len(years)-1)
+            years = sorted(df["Year"].unique())
+            year  = st.selectbox("Year", years, index=len(years) - 1)
 
-            sankey_levels = ["Country"]
+            sankey_opts = ["Country"]
             if has_airports:
-                sankey_levels.insert(0, "Airport")
-            agg_level  = st.selectbox("Aggregation", sankey_levels)
+                sankey_opts.insert(0, "Airport")
+            agg_level = st.selectbox("Aggregation", sankey_opts)
 
-            origin_col = "Origin Airport" if agg_level=="Airport" else "Origin Country Name"
-            dest_col   = "Destination Airport" if agg_level=="Airport" else "Destination Country Name"
+            origin_col = (
+                "Origin Airport" if agg_level == "Airport"
+                else "Origin Country Name"
+            )
+            dest_col = (
+                "Destination Airport" if agg_level == "Airport"
+                else "Destination Country Name"
+            )
 
             df_year = (
                 df[df["Year"] == year]
@@ -339,11 +358,11 @@ if mode == "Descriptives":
                   .sum()
             )
 
-            all_origins      = sorted(df_year[origin_col].unique())
+            all_origins = sorted(df_year[origin_col].unique())
             selected_origins = st.multiselect(
                 f"Select {agg_level.lower()}s of origin",
                 all_origins,
-                default=all_origins[:5]
+                default=all_origins[:5],
             )
             top_n_dest = st.number_input(
                 "Top N destinations per origin", 1, 50, 5, 1
@@ -357,41 +376,38 @@ if mode == "Descriptives":
             flows = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
 
             if flows.empty:
-                st.warning("No flows to display—adjust your selections or try another year.")
+                st.warning("No flows to display—adjust selections.")
             else:
                 labels = list(dict.fromkeys(
                     flows[origin_col].tolist() + flows[dest_col].tolist()
                 ))
-                idx    = {lab: i for i, lab in enumerate(labels)}
-                src    = flows[origin_col].map(idx).tolist()
-                tgt    = flows[dest_col].map(idx).tolist()
-                vals   = flows["Passengers"].tolist()
+                idx = {lab: i for i, lab in enumerate(labels)}
+                src = flows[origin_col].map(idx).tolist()
+                tgt = flows[dest_col].map(idx).tolist()
+                vals= flows["Passengers"].tolist()
 
-                palette      = px.colors.qualitative.Plotly
-                unique_orig  = list(dict.fromkeys(flows[origin_col].tolist()))
-                color_map    = {
-                    orig: palette[i % len(palette)]
-                    for i, orig in enumerate(unique_orig)
-                }
+                palette   = px.colors.qualitative.Plotly
+                unique_o  = list(dict.fromkeys(flows[origin_col].tolist()))
+                color_map = {o: palette[i % len(palette)] for i, o in enumerate(unique_o)}
                 link_colors = []
-                for orig in flows[origin_col]:
-                    hexc = color_map[orig].lstrip("#")
+                for o in flows[origin_col]:
+                    hexc = color_map[o].lstrip("#")
                     r, g, b = (int(hexc[i:i+2], 16) for i in (0, 2, 4))
                     link_colors.append(f"rgba({r},{g},{b},0.4)")
 
                 sankey = go.Sankey(
                     arrangement="snap",
                     node=dict(label=labels, pad=15, thickness=20),
-                    link=dict(source=src, target=tgt, value=vals, color=link_colors)
+                    link=dict(source=src, target=tgt, value=vals, color=link_colors),
                 )
                 fig = go.Figure(data=[sankey])
                 fig.update_layout(
                     title_text=f"Passenger Flows in {year} ({agg_level}-level)",
-                    font=dict(size=18)
+                    font=dict(size=18),
                 )
                 st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("Add a `Year` column to your data to enable the Sankey diagram.")
+            st.info("Add a `Year` column to enable the Sankey diagram.")
 
     with tab_desc_sup:
         st.subheader("📦 Descriptive: Supply Data (Dummy)")
@@ -407,47 +423,57 @@ if mode == "Descriptives":
                 sup_sum,
                 x="Origin Airport",
                 y="Operating Airline   Capacity",
-                title="Total Capacity by Origin Airport"
+                title="Total Capacity by Origin Airport",
             )
             st.plotly_chart(fig_sup, use_container_width=True)
         else:
-            st.info("Supply analysis requires airport-level passenger data.")
+            st.info("Supply analysis requires airport‐level data.")
 
 elif mode == "Simulation":
     sub1, sub2 = st.tabs(["Direct effects", "Catalytic effects"])
     with sub1:
         tab_sim_me, tab_sim_sup = st.tabs(["Market Equilibrium", "Supply"])
         with tab_sim_me:
-            level_label = "Airport" if has_airports else "Country"
-            st.subheader(f"📊 {level_label}-Pair Passenger Results")
-
-            # which ID columns to show
+            # choose ID columns
             if has_airports:
                 id_orig, id_dest = "Origin Airport", "Destination Airport"
             else:
                 id_orig, id_dest = "Origin Country Name", "Destination Country Name"
 
+            # build table columns
             table_cols = []
             if has_operating:
                 table_cols.append("Operating Airline")
             table_cols += [id_orig, id_dest]
-            metrics_cols = [
-                "Passengers","Distance (km)","CO2 per pax (kg)",
-                "Avg. Total Fare(USD)","Carbon cost per pax",
-                "Air passenger tax per pax","New Avg Fare","Passenger Δ (%)"
-            ]
-            st.dataframe(df[table_cols + metrics_cols], use_container_width=True)
 
-            # Bar chart: passenger change by selected origin level
+            # include distance/CO2 only if available
+            metrics = ["Passengers"]
+            if has_distance:
+                metrics += ["Distance (km)", "CO2 per pax (kg)"]
+            metrics += [
+                "Avg. Total Fare(USD)",
+                "Carbon cost per pax",
+                "Air passenger tax per pax",
+                "New Avg Fare",
+                "Passenger Δ (%)",
+            ]
+            st.dataframe(df[table_cols + metrics], use_container_width=True)
+
+            # Bar chart: passenger change by origin
             origin_summary = df.groupby(id_orig, as_index=False).agg(
-                Passengers=("Passengers","sum"),
-                After=("Passengers after policy","sum")
+                Passengers=("Passengers", "sum"),
+                After=("Passengers after policy", "sum")
             )
-            origin_summary["Δ (%)"] = (origin_summary["After"]/origin_summary["Passengers"]-1)*100
+            origin_summary["Δ (%)"] = (
+                origin_summary["After"] / origin_summary["Passengers"] - 1
+            ) * 100
             fig1 = px.bar(
-                origin_summary, x=id_orig, y="Δ (%)", text="Δ (%)",
+                origin_summary,
+                x=id_orig,
+                y="Δ (%)",
+                text="Δ (%)",
                 title=f"Passenger Change by {id_orig}",
-                labels={"Δ (%)":"Δ Passengers (%)"}
+                labels={"Δ (%)": "Δ Passengers (%)"},
             )
             fig1.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
             st.plotly_chart(fig1, use_container_width=True)
@@ -464,45 +490,49 @@ elif mode == "Simulation":
 
             # Bar chart: fare change
             price_summary = df.groupby(id_orig, as_index=False).agg(
-                **{"Avg Δ (%)":("Fare Δ (%)","mean")}
+                **{"Avg Δ (%)": ("Fare Δ (%)", "mean")}
             )
             fig2 = px.bar(
-                price_summary, x=id_orig, y="Avg Δ (%)",
-                title=f"Average Fare Change by {id_orig}", text="Avg Δ (%)",
-                labels={"Avg Δ (%)":"Δ Fare (%)"}
+                price_summary,
+                x=id_orig,
+                y="Avg Δ (%)",
+                title=f"Average Fare Change by {id_orig}",
+                text="Avg Δ (%)",
+                labels={"Avg Δ (%)": "Δ Fare (%)"},
             )
             fig2.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
             st.plotly_chart(fig2, use_container_width=True)
 
-            # Distance KDE
-            df_b = df[["Distance (km)","Passengers"]].rename(columns={"Distance (km)":"x","Passengers":"w"})
-            df_a = df[["Distance (km)","Passengers after policy"]].rename(columns={"Distance (km)":"x","Passengers after policy":"w"})
-            scenarios = {"Before":df_b, "After":df_a}
-            fig3 = go.Figure()
-            for name, sub in scenarios.items():
-                xvals = sub["x"].dropna().to_numpy()
-                wvals = sub["w"].fillna(0).to_numpy()
-                if len(xvals)<2 or wvals.sum()<=0:
-                    continue
-                kde = gaussian_kde(xvals, weights=wvals)
-                xs = np.linspace(xvals.min(), xvals.max(), 500)
-                ys = kde(xs) * wvals.sum()
-                fig3.add_trace(go.Scatter(x=xs, y=ys, mode="lines", fill="tozeroy", name=name))
-            fig3.update_layout(
-                title="Passenger Distance Density",
-                xaxis_title="Distance (km)",
-                yaxis_title="Passengers"
-            )
-            st.plotly_chart(fig3, use_container_width=True)
+            # Distance KDE scaled by passenger count (only if distance exists)
+            if has_distance:
+                df_b = df[["Distance (km)", "Passengers"]].rename(columns={"Distance (km)": "x", "Passengers": "w"})
+                df_a = df[["Distance (km)", "Passengers after policy"]].rename(columns={"Distance (km)": "x", "Passengers after policy": "w"})
+                scenarios = {"Before": df_b, "After": df_a}
+                fig3 = go.Figure()
+                for name, sub in scenarios.items():
+                    xvals = sub["x"].dropna().to_numpy()
+                    wvals = sub["w"].fillna(0).to_numpy()
+                    if len(xvals) < 2 or wvals.sum() <= 0:
+                        continue
+                    kde = gaussian_kde(xvals, weights=wvals)
+                    xs = np.linspace(xvals.min(), xvals.max(), 500)
+                    ys = kde(xs) * wvals.sum()
+                    fig3.add_trace(go.Scatter(x=xs, y=ys, mode="lines", fill="tozeroy", name=name))
+                fig3.update_layout(
+                    title="Passenger Distance Density",
+                    xaxis_title="Distance (km)",
+                    yaxis_title="Passengers"
+                )
+                st.plotly_chart(fig3, use_container_width=True)
+            else:
+                st.info("Distance‐based density plot disabled (no `Distance (km)` column).")
 
-            # Kepler map (only if airport & coords exist)
+            # Kepler map: country‐level arcs (requires airports + coords)
             if has_airports and not df[["Origin Lat","Origin Lon","Dest Lat","Dest Lon"]].isna().all().all():
                 orig = df[["Origin Country Name","Origin Lat","Origin Lon"]].rename(
-                    columns={"Origin Country Name":"Country","Origin Lat":"Lat","Origin Lon":"Lon"}
-                )
+                    columns={"Origin Country Name":"Country","Origin Lat":"Lat","Origin Lon":"Lon"})
                 dest = df[["Destination Country Name","Dest Lat","Dest Lon"]].rename(
-                    columns={"Destination Country Name":"Country","Dest Lat":"Lat","Dest Lon":"Lon"}
-                )
+                    columns={"Destination Country Name":"Country","Dest Lat":"Lat","Dest Lon":"Lon"})
                 cents = pd.concat([orig,dest],ignore_index=True).dropna(subset=["Lat","Lon"])\
                          .groupby("Country",as_index=False)[["Lat","Lon"]].mean()
                 ab = df[["Origin Country Name","Destination Country Name","Passengers","Passengers after policy"]].copy()
@@ -571,7 +601,7 @@ elif mode == "Simulation":
                 if has_airports:
                     st.warning("Upload coords to see Kepler map.")
                 else:
-                    st.info("Airport-level coordinates not available – map disabled.")
+                    st.info("Airport‐level coordinates not available – map disabled.")
 
         with tab_sim_sup:
             st.subheader("📦 Supply-side HHI & Capacity Share Analysis")
@@ -653,11 +683,10 @@ elif mode == "Simulation":
                             with col:
                                 st.plotly_chart(fig_pie, use_container_width=False)
             else:
-                st.info("Supply analysis requires airport-level passenger data.")
+                st.info("Supply analysis requires airport‐level data.")
 
     with sub2:
         st.subheader("🧪 Catalytic effects")
-        # bubble by whichever origin level is available
         origin_dim = "Origin Airport" if has_airports else "Origin Country Name"
         airport_df = df.groupby(origin_dim, as_index=False).agg(
             Passengers=("Passengers","sum"),
