@@ -529,16 +529,10 @@ elif mode == "Simulation":
                     "mapStyle":{"styleType": "light"}
                   }
                 }
-                map1 = KeplerGl(height=600, data={"pairs":pa}, config=cfg)
+                map1 = KeplerGl(height=600, data={"pairs": pa}, config=cfg)
                 html = map1._repr_html_()
                 if isinstance(html, bytes):
                     html = html.decode("utf-8")
-
-                if "<head>" in html:
-                    html = html.replace(
-                      "<head>",
-                      "<head><meta name='viewport' content='width=device-width, initial-scale=2'>"
-                    )
 
                 components.html(html, height=800, width=1600)
             else:
