@@ -524,17 +524,17 @@ elif mode == "Simulation":
                     "mapState":{
                       "latitude":cents["Lat"].mean(),
                       "longitude":cents["Lon"].mean(),
-                      "zoom":3,"pitch":10
+                      "zoom":3,"pitch":30
                     },
                     "mapStyle": {}
                   } 
                 }   
-                map1 = KeplerGl(height=1000, width=1900, data={"pairs": pa}, config=cfg)
+                map1 = KeplerGl(height=800, width=1600, data={"pairs": pa}, config=cfg)
                 html = map1._repr_html_()
                 if isinstance(html, bytes):
                     html = html.decode("utf-8")
 
-                components.html(html, height=1000, width=1900)
+                components.html(html, height=800, width=1600)
             else:
                 st.warning("Upload coords to see Kepler map.")
 
