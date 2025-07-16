@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 from keplergl import KeplerGl
 import streamlit.components.v1 as components
 from scipy.stats import gaussian_kde
+import statsmodels.formula.api as smf   # for regression demo
 
 # ----------------------
 # Model configuration (defaults)
@@ -14,25 +15,67 @@ PRICE_ELASTICITY_DEMAND = -0.8
 GDP_ELASTICITY_DEMAND   = 1.4
 
 # ----------------------
-# Helper – generate dummy data when no CSV is provided
+# Helper – generate dummy passenger data when no CSV is provided
 # ----------------------
 def load_dummy_data() -> pd.DataFrame:
     rng = np.random.default_rng(seed=42)
     origins = ["Germany", "France", "United States", "Japan"]
     dests   = ["Spain", "Italy", "United Kingdom", "Canada"]
+    years   = list(range(2018, 2025))
     rows = []
     for o in origins:
         for d in dests:
-            if o == d:
-                continue
+            if o == d: continue
+            # assign a random sample of 4–6 observations per pair
+            for _ in range(rng.integers(4,7)):
+                rows.append({
+                    "Origin Country Name":      o,
+                    "Destination Country Name": d,
+                    "Origin Airport":           f"{o[:3].upper()}-INTL",
+                    "Destination Airport":      f"{d[:3].upper()}-INTL",
+                    "Distance (km)":            int(rng.integers(500, 9000)),
+                    "Passengers":               int(rng.integers(50_000, 1_000_000)),
+                    "Avg. Total Fare(USD)":     round(rng.uniform(150, 700), 2),
+                    "Year":                     int(rng.choice(years)),
+                    "Month":                    int(rng.integers(1, 13)),
+                })
+    return pd.DataFrame(rows)
+
+# ----------------------
+# Helper – generate dummy coords when no XLSX is provided
+# ----------------------
+def load_dummy_coords(df: pd.DataFrame) -> pd.DataFrame:
+    rng = np.random.default_rng(seed=1)
+    codes = pd.unique(
+        df["Origin Airport"].str.split("-", expand=True)[0]
+        .append(df["Destination Airport"].str.split("-", expand=True)[0])
+    )
+    rows = []
+    for code in codes:
+        rows.append({
+            "IATA_Code": code,
+            "DecLat":    float(rng.uniform(-60, 80)),
+            "DecLon":    float(rng.uniform(-180, 180)),
+        })
+    return pd.DataFrame(rows)
+
+# ----------------------
+# Helper – generate dummy supply data when no CSV is provided
+# ----------------------
+def load_dummy_supply(df: pd.DataFrame) -> pd.DataFrame:
+    rng = np.random.default_rng(seed=24)
+    pairs = df[["Origin Airport","Destination Airport"]].drop_duplicates()
+    airlines = ["AirFast","SkyHigh","GlobeAir","FlyRight","JetQuick"]
+    rows = []
+    for _, r in pairs.iterrows():
+        n = rng.integers(2,5)
+        chosen = rng.choice(airlines, size=n, replace=False)
+        for a in chosen:
             rows.append({
-                "Origin Country Name":      o,
-                "Destination Country Name": d,
-                "Origin Airport":           f"{o[:3].upper()}-INTL",
-                "Destination Airport":      f"{d[:3].upper()}-INTL",
-                "Distance (km)":            int(rng.integers(500, 9000)),
-                "Passengers":               int(rng.integers(50_000, 1_000_000)),
-                "Avg. Total Fare(USD)":     round(rng.uniform(150, 700), 2),
+                "Origin Airport":                r["Origin Airport"],
+                "Destination Airport":           r["Destination Airport"],
+                "Operating Airline":             a,
+                "Operating Airline   Capacity":  float(rng.integers(5_000, 200_000)),
             })
     return pd.DataFrame(rows)
 
@@ -44,7 +87,7 @@ st.title("✈️ JETPAS - Joint Economic & Transport Policy Aviation Simulator")
 st.markdown("Simulate air travel between airports and policy impacts.")
 
 # Sidebar – uploads
-st.sidebar.header("📈 Policy & Data Inputs")
+st.sidebar.header("💻 Data & Mode")
 uploaded_file = st.sidebar.file_uploader("Upload passenger CSV", type=["csv"])
 coord_file    = st.sidebar.file_uploader("Upload airport coords (.xlsx)", type=["xlsx"])
 
@@ -173,25 +216,31 @@ df["Origin Lat"] = np.nan; df["Origin Lon"] = np.nan
 df["Dest Lat"]   = np.nan; df["Dest Lon"]   = np.nan
 
 # ----------------------
-# Load & merge coordinates
+# Load & merge coordinates (dummy if none)
 # ----------------------
 if coord_file:
     try:
         coords = pd.read_excel(coord_file, engine="openpyxl").drop_duplicates("IATA_Code")
-        if {"IATA_Code","DecLat","DecLon"}.issubset(coords.columns):
-            cmap = coords.set_index("IATA_Code")[["DecLat","DecLon"]]
-            df["Origin Code"] = df["Origin Airport"].str.partition("-")[0]
-            df["Dest Code"]   = df["Destination Airport"].str.partition("-")[0]
-            df["Origin Lat"]  = df["Origin Code"].map(cmap["DecLat"])
-            df["Origin Lon"]  = df["Origin Code"].map(cmap["DecLon"])
-            df["Dest Lat"]    = df["Dest Code"].map(cmap["DecLat"])
-            df["Dest Lon"]    = df["Dest Code"].map(cmap["DecLon"])
-        else:
-            st.sidebar.warning("Coords file missing IATA_Code/DecLat/DecLon")
     except ImportError:
         st.sidebar.warning("Install openpyxl to read .xlsx")
+        coords = load_dummy_coords(df)
     except Exception as e:
         st.sidebar.warning(f"Failed coords processing: {e}")
+        coords = load_dummy_coords(df)
+else:
+    coords = load_dummy_coords(df)
+    st.sidebar.info("No coords file – using dummy coords.")
+
+if {"IATA_Code","DecLat","DecLon"}.issubset(coords.columns):
+    cmap = coords.set_index("IATA_Code")[["DecLat","DecLon"]]
+    df["Origin Code"] = df["Origin Airport"].str.partition("-")[0]
+    df["Dest Code"]   = df["Destination Airport"].str.partition("-")[0]
+    df["Origin Lat"]  = df["Origin Code"].map(cmap["DecLat"])
+    df["Origin Lon"]  = df["Origin Code"].map(cmap["DecLon"])
+    df["Dest Lat"]    = df["Dest Code"].map(cmap["DecLat"])
+    df["Dest Lon"]    = df["Dest Code"].map(cmap["DecLon"])
+else:
+    st.sidebar.warning("Coords missing required columns – using dummy coords")
 
 # ----------------------
 # Main area by mode
@@ -246,22 +295,17 @@ if mode == "Descriptives":
             )
             st.plotly_chart(fig, use_container_width=True)
 
-    # Sankey: change in passenger flows between two years
-        # ── Sankey: Passenger Flows by Year ──
-        import plotly.express as px  # you already have this at the top
-
+        # Sankey: Passenger Flows by Year
         if "Year" in df.columns:
             st.markdown("---")
             st.subheader("🔀 Sankey: Passenger Flows by Year")
-        
-            # 1) Year & aggregation
+
             years      = sorted(df["Year"].unique())
             year       = st.selectbox("Year", years, index=len(years)-1)
             agg_level  = st.selectbox("Aggregation", ["Airport", "Country"])
             origin_col = "Origin Airport" if agg_level=="Airport" else "Origin Country Name"
             dest_col   = "Destination Airport" if agg_level=="Airport" else "Destination Country Name"
-        
-            # 2) pick origins & top‑N dests
+
             all_origins      = sorted(df[origin_col].dropna().unique())
             selected_origins = st.multiselect(
                 f"Select {agg_level.lower()}s of origin",
@@ -271,8 +315,7 @@ if mode == "Descriptives":
             top_n_dest = st.number_input(
                 "Top N destinations per origin", 1, 50, 5, 1
             )
-        
-            # 3) aggregate & filter
+
             df_year = (
                 df[df["Year"] == year]
                   .dropna(subset=[origin_col, dest_col])
@@ -280,19 +323,17 @@ if mode == "Descriptives":
                   .sum()
             )
             df_year = df_year[df_year[origin_col].isin(selected_origins)]
-        
-            # 4) pick each origin’s top destinations
+
             parts = []
             for orig in selected_origins:
                 sub = df_year[df_year[origin_col] == orig]
                 if not sub.empty:
                     parts.append(sub.nlargest(top_n_dest, "Passengers"))
             flows = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
-        
+
             if flows.empty:
                 st.warning("No flows to display—adjust your selections or try another year.")
             else:
-                # 5) build node labels & indices
                 labels = list(dict.fromkeys(
                     flows[origin_col].tolist() + flows[dest_col].tolist()
                 ))
@@ -300,8 +341,7 @@ if mode == "Descriptives":
                 src    = flows[origin_col].map(idx).tolist()
                 tgt    = flows[dest_col].map(idx).tolist()
                 vals   = flows["Passengers"].tolist()
-        
-                # 6) pick a palette and map each origin to a color
+
                 palette      = px.colors.qualitative.Plotly
                 unique_orig  = list(dict.fromkeys(flows[origin_col].tolist()))
                 color_map    = {
@@ -312,9 +352,8 @@ if mode == "Descriptives":
                 for orig in flows[origin_col]:
                     hexc = color_map[orig].lstrip("#")
                     r, g, b = (int(hexc[i:i+2], 16) for i in (0, 2, 4))
-                    link_colors.append(f"rgba({r},{g},{b},0.4)")  # 0.4 opacity
-        
-                # 7) plot with go.Sankey, passing link.color
+                    link_colors.append(f"rgba({r},{g},{b},0.4)")
+
                 sankey = go.Sankey(
                     arrangement="snap",
                     node=dict(
@@ -335,30 +374,30 @@ if mode == "Descriptives":
                     font=dict(size=18)
                 )
                 st.plotly_chart(fig, use_container_width=True)
-        
         else:
             st.info("Add a `Year` column to your data to enable the Sankey diagram.")
-        
-                        
-                                
-                                
-                                
-                                
-
-        
-        
-
 
     with tab_desc_sup:
-        st.subheader("📦 Descriptive: Supply Data")
-        # (detection of cross-section vs longitudinal & similar controls go here)
+        st.subheader("📦 Descriptive: Supply Data (Dummy)")
+        supply_demo = load_dummy_supply(df)
+        st.dataframe(supply_demo.head(), use_container_width=True)
+        sup_sum = (
+            supply_demo
+            .groupby("Origin Airport", as_index=False)["Operating Airline   Capacity"]
+            .sum()
+        )
+        fig_sup = px.bar(
+            sup_sum,
+            x="Origin Airport",
+            y="Operating Airline   Capacity",
+            title="Total Capacity by Origin Airport"
+        )
+        st.plotly_chart(fig_sup, use_container_width=True)
 
 elif mode == "Simulation":
     sub1, sub2 = st.tabs(["Direct effects", "Catalytic effects"])
-
     with sub1:
         tab_sim_me, tab_sim_sup = st.tabs(["Market Equilibrium", "Supply"])
-
         with tab_sim_me:
             st.subheader("📊 Airport-Pair Passenger Results")
             st.dataframe(df[[
@@ -508,75 +547,79 @@ elif mode == "Simulation":
             )
             if supply_file:
                 supply_df = pd.read_csv(supply_file)
-                req_sup = {
-                    "Origin Airport","Destination Airport",
-                    "Operating Airline","Operating Airline   Capacity"
-                }
-                if not req_sup.issubset(supply_df.columns):
-                    st.error("Supply CSV missing required columns.")
-                else:
-                    orig_map = df[["Origin Airport","Origin Country Name"]].drop_duplicates()
-                    dest_map = df[["Destination Airport","Destination Country Name"]].drop_duplicates()
-                    supply_df = supply_df.merge(orig_map, on="Origin Airport", how="left")
-                    supply_df = supply_df.merge(dest_map, on="Destination Airport", how="left")
-                    pass_change = df[[
-                        "Origin Airport","Destination Airport","Passenger Δ (%)"
-                    ]]
-                    supply_df = supply_df.merge(
-                        pass_change,
-                        on=["Origin Airport","Destination Airport"],
-                        how="left"
-                    ).fillna({"Passenger Δ (%)": 0})
-                    supply_df["Adj Capacity"] = (
-                        supply_df["Operating Airline   Capacity"]
-                        * (1 + supply_df["Passenger Δ (%)"] / 100)
-                    )
-                    def compute_hhi(g):
-                        caps = g["Adj Capacity"].astype(float)
-                        shares = caps / caps.sum()
-                        return (shares**2).sum() * 10000
-                    hhi = (
-                        supply_df
-                        .groupby(
-                            ["Origin Country Name","Origin Airport","Destination Airport"],
-                            as_index=False
-                        )
-                        .apply(lambda g: pd.Series({"HHI": compute_hhi(g)}))
-                        .reset_index(drop=True)
-                    )
-                    fig_hhi = px.box(
-                        hhi,
-                        x="Origin Country Name",
-                        y="HHI",
-                        title="HHI per Airport Pair by Origin Country (Adjusted Capacity)",
-                        labels={"HHI":"HHI Index"}
-                    )
-                    st.plotly_chart(fig_hhi, use_container_width=True)
-
-                    countries = supply_df["Origin Country Name"].unique().tolist()
-                    max_cols = 4
-                    for i in range(0, len(countries), max_cols):
-                        chunk = countries[i:i+max_cols]
-                        cols = st.columns(len(chunk))
-                        for col, country in zip(cols, chunk):
-                            pie_df = (
-                                supply_df[supply_df["Origin Country Name"] == country]
-                                .groupby("Operating Airline", as_index=False)
-                                .agg({"Adj Capacity":"sum"})
-                                .nlargest(10, "Adj Capacity")
-                            )
-                            fig_pie = px.pie(
-                                pie_df,
-                                names="Operating Airline",
-                                values="Adj Capacity",
-                                title=f"{country}: Top 10 Airline Capacity Share",
-                                height=300,
-                                width=300
-                            )
-                            with col:
-                                st.plotly_chart(fig_pie, use_container_width=False)
             else:
-                st.info("Upload a supply CSV to see HHI & capacity share analysis.")
+                st.info("No supply CSV – using dummy supply data.")
+                supply_df = load_dummy_supply(df)
+
+            req_sup = {
+                "Origin Airport","Destination Airport",
+                "Operating Airline","Operating Airline   Capacity"
+            }
+            if not req_sup.issubset(supply_df.columns):
+                st.error("Supply data missing required columns.")
+            else:
+                orig_map = df[["Origin Airport","Origin Country Name"]].drop_duplicates()
+                dest_map = df[["Destination Airport","Destination Country Name"]].drop_duplicates()
+                supply_df = supply_df.merge(orig_map, on="Origin Airport", how="left")
+                supply_df = supply_df.merge(dest_map, on="Destination Airport", how="left")
+                pass_change = df[[
+                    "Origin Airport","Destination Airport","Passenger Δ (%)"
+                ]]
+                supply_df = supply_df.merge(
+                    pass_change,
+                    on=["Origin Airport","Destination Airport"],
+                    how="left"
+                ).fillna({"Passenger Δ (%)": 0})
+                supply_df["Adj Capacity"] = (
+                    supply_df["Operating Airline   Capacity"]
+                    * (1 + supply_df["Passenger Δ (%)"] / 100)
+                )
+
+                def compute_hhi(g):
+                    caps = g["Adj Capacity"].astype(float)
+                    shares = caps / caps.sum()
+                    return (shares**2).sum() * 10000
+
+                hhi = (
+                    supply_df
+                    .groupby(
+                        ["Origin Country Name","Origin Airport","Destination Airport"],
+                        as_index=False
+                    )
+                    .apply(lambda g: pd.Series({"HHI": compute_hhi(g)}))
+                    .reset_index(drop=True)
+                )
+                fig_hhi = px.box(
+                    hhi,
+                    x="Origin Country Name",
+                    y="HHI",
+                    title="HHI per Airport Pair by Origin Country (Adjusted Capacity)",
+                    labels={"HHI":"HHI Index"}
+                )
+                st.plotly_chart(fig_hhi, use_container_width=True)
+
+                countries = supply_df["Origin Country Name"].unique().tolist()
+                max_cols = 4
+                for i in range(0, len(countries), max_cols):
+                    chunk = countries[i:i+max_cols]
+                    cols = st.columns(len(chunk))
+                    for col, country in zip(cols, chunk):
+                        pie_df = (
+                            supply_df[supply_df["Origin Country Name"] == country]
+                            .groupby("Operating Airline", as_index=False)
+                            .agg({"Adj Capacity":"sum"})
+                            .nlargest(10, "Adj Capacity")
+                        )
+                        fig_pie = px.pie(
+                            pie_df,
+                            names="Operating Airline",
+                            values="Adj Capacity",
+                            title=f"{country}: Top 10 Airline Capacity Share",
+                            height=300,
+                            width=300
+                        )
+                        with col:
+                            st.plotly_chart(fig_pie, use_container_width=False)
 
     with sub2:
         st.subheader("🧪 Catalytic effects")
@@ -605,7 +648,11 @@ elif mode == "Simulation":
 else:  # Regression
     st.subheader("📊 Panel Regression Analysis")
     if panel_data:
-        st.write("Detected 'Year' column – ready for regression.")
-        # Regression UI and output go here...
+        st.write("Detected 'Year' column – running demo regression…")
+        model = smf.ols(
+            formula="Passengers ~ Q('New Avg Fare') + Q('CO2 per pax (kg)')",
+            data=df
+        ).fit()
+        st.text(model.summary())
     else:
         st.info("Upload panel data with a 'Year' column to enable regression mode.")
