@@ -527,8 +527,19 @@ elif mode == "Simulation":
                       "zoom":2.2,"pitch":30
                     },
                     "mapStyle":{}
-                  }
-                }
+                    "mapStyle": {
+                      "styleType": "dark",
+                      "topLayerGroups": {},
+                      "visibleLayerGroups": {
+                        "label": True,
+                        "road": False,
+                        "border": True,
+                        "building": False,
+                        "water": True,
+                        "land": True
+                      }
+                    }
+                      
                 map1 = KeplerGl(height=1000, width=1900, data={"pairs": pa}, config=cfg)
                 html = map1._repr_html_()
                 if isinstance(html, bytes):
