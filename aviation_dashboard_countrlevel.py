@@ -464,37 +464,16 @@ elif mode == "Simulation":
             )
             st.plotly_chart(fig3, use_container_width=True)
 
-            # Kepler map: country‐level arcs (Δ %)
+            # Kepler map: country-level arcs (Δ %)
             cols_req = ["Origin Lat","Origin Lon","Dest Lat","Dest Lon"]
             if all(c in df.columns for c in cols_req):
-                orig = (
-                    df[["Origin Country Name","Origin Lat","Origin Lon"]]
-                    .rename(columns={
-                        "Origin Country Name":"Country",
-                        "Origin Lat":"Lat",
-                        "Origin Lon":"Lon"
-                    })
-                )
-                dest = (
-                    df[["Destination Country Name","Dest Lat","Dest Lon"]]
-                    .rename(columns={
-                        "Destination Country Name":"Country",
-                        "Dest Lat":"Lat",
-                        "Dest Lon":"Lon"
-                    })
-                )
-                cents = (
-                    pd.concat([orig, dest], ignore_index=True)
-                      .dropna(subset=["Lat","Lon"])
-                      .groupby("Country", as_index=False)[["Lat","Lon"]]
-                      .mean()
-                )
-                ab = df[[
-                    "Origin Country Name",
-                    "Destination Country Name",
-                    "Passengers",
-                    "Passengers after policy"
-                ]].copy()
+                orig = df[["Origin Country Name","Origin Lat","Origin Lon"]].rename(
+                    columns={"Origin Country Name":"Country","Origin Lat":"Lat","Origin Lon":"Lon"})
+                dest = df[["Destination Country Name","Dest Lat","Dest Lon"]].rename(
+                    columns={"Destination Country Name":"Country","Dest Lat":"Lat","Dest Lon":"Lon"})
+                cents = pd.concat([orig,dest],ignore_index=True).dropna(subset=["Lat","Lon"])\
+                         .groupby("Country",as_index=False)[["Lat","Lon"]].mean()
+                ab = df[["Origin Country Name","Destination Country Name","Passengers","Passengers after policy"]].copy()
                 ab["A"] = np.where(
                     ab["Origin Country Name"] < ab["Destination Country Name"],
                     ab["Origin Country Name"],
@@ -505,85 +484,57 @@ elif mode == "Simulation":
                     ab["Destination Country Name"],
                     ab["Origin Country Name"]
                 )
-                pa = (
-                    ab.groupby(["A","B"], as_index=False)
-                      .agg(Passengers=("Passengers","sum"),
-                           After=("Passengers after policy","sum"))
+                pa = ab.groupby(["A","B"], as_index=False).agg(
+                    Passengers=("Passengers","sum"),
+                    After=("Passengers after policy","sum")
                 )
                 pa["Δ (%)"] = (pa["After"]/pa["Passengers"] - 1) * 100
-            
-                # merge in centroid coords
-                pa = (
-                    pa
-                    .merge(cents.rename(columns={"Country":"A", "Lat":"A Lat", "Lon":"A Lon"}),
-                           on="A", how="left")
-                    .merge(cents.rename(columns={"Country":"B", "Lat":"B Lat", "Lon":"B Lon"}),
-                           on="B", how="left")
-                )
-            
-                # --- here’s the updated config with vector style ---
+                pa = pa.merge(cents, left_on="A", right_on="Country") \
+                       .rename(columns={"Lat":"A Lat","Lon":"A Lon"}) \
+                       .drop(columns="Country")
+                pa = pa.merge(cents, left_on="B", right_on="Country") \
+                       .rename(columns={"Lat":"B Lat","Lon":"B Lon"}) \
+                       .drop(columns="Country")
                 cfg = {
-                  "version": "v1",
-                  "config": {
-                    "visState": {
-                      "filters": [],
-                      "layers": [{
-                        "id": "arc",
-                        "type": "arc",
-                        "config": {
-                          "dataId": "pairs",
-                          "label": "Δ (%)",
-                          "columns": {
-                            "lat0": "A Lat",
-                            "lng0": "A Lon",
-                            "lat1": "B Lat",
-                            "lng1": "B Lon"
+                  "version":"v1","config":{
+                    "visState":{"filters":[],"layers":[{
+                        "id":"arc","type":"arc","config":{
+                          "dataId":"pairs","label":"Δ (%)",
+                          "columns":{
+                            "lat0":"A Lat","lng0":"A Lon","lat1":"B Lat","lng1":"B Lon"
                           },
-                          "isVisible": True,
-                          "visConfig": {
-                            "thickness": 3,
-                            "opacity": 0.8,
-                            "colorField": {"name":"Δ (%)","type":"real"},
-                            "colorScale": "quantile",
-                            "colorRange": {
-                              "name":"Global Warming",
-                              "type":"sequential",
-                              "category":"Uber",
+                          "isVisible":True,
+                          "visConfig":{
+                            "thickness":3,"opacity":0.8,
+                            "colorField":{"name":"Δ (%)","type":"real"},
+                            "colorScale":"quantile",
+                            "colorRange":{
+                              "name":"Global Warming","type":"sequential","category":"Uber",
                               "colors":["#ffffcc","#a1dab4","#41b6c4","#2c7fb8","#253494"]
                             },
-                            "sizeField": "Δ (%)",
-                            "sizeScale": 10
+                            "sizeField":"Δ (%)","sizeScale":10
                           }
                         }
-                      }],
-                      "interactionConfig": {
-                        "tooltip": {
-                          "fieldsToShow": {"pairs": ["A","B","Δ (%)"]},
-                          "enabled": True
-                        }
+                    }],"interactionConfig":{
+                      "tooltip":{
+                        "fieldsToShow":{"pairs":["A","B","Δ (%)"]},
+                        "enabled":True
                       }
+                    }},
+                    "mapState":{
+                      "latitude":cents["Lat"].mean(),
+                      "longitude":cents["Lon"].mean(),
+                      "zoom":2.2,"pitch":30
                     },
-                    "mapState": {
-                      "latitude": cents["Lat"].mean(),
-                      "longitude": cents["Lon"].mean(),
-                      "zoom": 2.2,
-                      "pitch": 30
-                    },
-                    # <— add a vector‐tile style for crisp labels
-                    "mapStyle": {
-                      "styleType": "light"    # options: "light", "dark", "satellite"
-                    }
+                    "mapStyle":{}
                   }
                 }
-            
-                map1 = KeplerGl(height=600, data={"pairs": pa}, config=cfg)
+                map1 = KeplerGl(height=600, data={"pairs":pa}, config=cfg)
                 html = map1._repr_html_()
                 if isinstance(html, bytes):
                     html = html.decode("utf-8")
-            
-                # bump up iframe size for extra resolution
-                components.html(html, height=800, width=1200)
-            
+                components.html(html, height=800, width=1600)
+
             else:
                 st.warning("Upload coords to see Kepler map.")
 
