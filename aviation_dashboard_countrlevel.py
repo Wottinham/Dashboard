@@ -46,10 +46,9 @@ def load_dummy_data() -> pd.DataFrame:
 # ----------------------
 def load_dummy_coords(df: pd.DataFrame) -> pd.DataFrame:
     rng = np.random.default_rng(seed=1)
-    codes = pd.unique(
-        df["Origin Airport"].str.split("-", expand=True)[0]
-        .append(df["Destination Airport"].str.split("-", expand=True)[0])
-    )
+    orig_codes = df["Origin Airport"].str.split("-", expand=True)[0]
+    dest_codes = df["Destination Airport"].str.split("-", expand=True)[0]
+    codes = pd.unique(pd.concat([orig_codes, dest_codes], ignore_index=True))
     rows = []
     for code in codes:
         rows.append({
