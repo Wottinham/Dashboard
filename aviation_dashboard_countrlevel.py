@@ -134,7 +134,7 @@ gdp_by_country  = {c: global_gdp for c in origin_all}
 # ----------------------
 # Top‐level view selector
 # ----------------------
-mode = st.sidebar.radio("Select view", ["Descriptives", "Simulation", "Regression"])
+mode = st.sidebar.radio("Select mode", ["Descriptives", "Simulation", "Regression"])
 
 # ----------------------
 # Sidebar – policy & parameter controls (hidden in Descriptives)
@@ -529,7 +529,7 @@ elif mode == "Simulation":
                     "mapStyle":{}
                   }
                 }
-                map1 = KeplerGl(height=600, data={"pairs": pa}, config=cfg)
+                map1 = KeplerGl(height=800, data={"pairs": pa}, config=cfg)
                 html = map1._repr_html_()
                 if isinstance(html, bytes):
                     html = html.decode("utf-8")
