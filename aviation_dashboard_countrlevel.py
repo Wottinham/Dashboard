@@ -533,7 +533,8 @@ elif mode == "Simulation":
                 html = map1._repr_html_()
                 if isinstance(html, bytes):
                     html = html.decode("utf-8")
-                components.html(html, height=500)
+                components.html(html, height=800, width=1200)
+
             else:
                 st.warning("Upload coords to see Kepler map.")
 
