@@ -441,6 +441,11 @@ elif mode == "Simulation":
             else:
                 id_orig, id_dest = "Origin Country Name", "Destination Country Name"
 
+            agg_options = ["Origin Country Name"]
+            if has_airports:   agg_options.insert(0, "Origin Airport")
+            if has_operating:  agg_options.insert(0, "Operating Airline")
+            level = st.selectbox("Aggregation Level", agg_options)
+            
             # build table columns
             table_cols = []
             if has_operating:
@@ -461,20 +466,14 @@ elif mode == "Simulation":
             st.dataframe(df[table_cols + metrics], use_container_width=True)
 
             # Bar chart: passenger change by origin
-            origin_summary = df.groupby(id_orig, as_index=False).agg(
-                Passengers=("Passengers", "sum"),
-                After=("Passengers after policy", "sum")
+            ps = df.groupby(level, as_index=False).agg(
+                Passengers=("Passengers","sum"),
+                After=("Passengers after policy","sum")
             )
-            origin_summary["Δ (%)"] = (
-                origin_summary["After"] / origin_summary["Passengers"] - 1
-            ) * 100
+            ps["Δ (%)"] = (ps["After"]/ps["Passengers"] - 1)*100
             fig1 = px.bar(
-                origin_summary,
-                x=id_orig,
-                y="Δ (%)",
-                text="Δ (%)",
-                title=f"Passenger Change by {id_orig}",
-                labels={"Δ (%)": "Δ Passengers (%)"},
+                ps, x=level, y="Δ (%)", text="Δ (%)",
+                title=f"Passenger Change by {level}"
             )
             fig1.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
             st.plotly_chart(fig1, use_container_width=True)
@@ -490,19 +489,17 @@ elif mode == "Simulation":
                 st.metric("Avg Carbon Cost (€)", f"{df['Carbon cost per pax'].mean():.2f}")
 
             # Bar chart: fare change
-            price_summary = df.groupby(id_orig, as_index=False).agg(
-                **{"Avg Δ (%)": ("Fare Δ (%)", "mean")}
+            # Average fare change: average Fare Δ (%) at level
+            pf = df.groupby(level, as_index=False).agg(
+                **{"Avg Δ (%)":("Fare Δ (%)","mean")}
             )
             fig2 = px.bar(
-                price_summary,
-                x=id_orig,
-                y="Avg Δ (%)",
-                title=f"Average Fare Change by {id_orig}",
-                text="Avg Δ (%)",
-                labels={"Avg Δ (%)": "Δ Fare (%)"},
+                pf, x=level, y="Avg Δ (%)", text="Avg Δ (%)",
+                title=f"Average Fare Change by {level}"
             )
             fig2.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
             st.plotly_chart(fig2, use_container_width=True)
+            
 
             # Distance KDE scaled by passenger count (only if distance exists)
             if has_distance:
