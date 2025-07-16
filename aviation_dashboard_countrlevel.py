@@ -526,7 +526,7 @@ elif mode == "Simulation":
                       "longitude":cents["Lon"].mean(),
                       "zoom":2.2,"pitch":30
                     },
-                    "mapStyle":{"styleType": "light"}
+                    "mapStyle":{}
                   }
                 }
                 map1 = KeplerGl(height=600, data={"pairs": pa}, config=cfg)
