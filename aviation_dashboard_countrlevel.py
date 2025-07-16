@@ -132,8 +132,9 @@ else:
 
 df = df.reset_index(drop=True)
 
-origin_all = sorted(df["Origin Country Name"].unique())
-dest_all   = sorted(df["Destination Country Name"].unique())
+# Convert to str so sorting never fails on weird types
+origin_all = sorted(df["Origin Country Name"].dropna().astype(str).unique())
+dest_all   = sorted(df["Destination Country Name"].dropna().astype(str).unique())
 panel_data = "Year" in df.columns
 
 # ----------------------
