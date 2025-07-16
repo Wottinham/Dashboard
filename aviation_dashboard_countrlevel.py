@@ -526,7 +526,6 @@ elif mode == "Simulation":
                       "longitude":cents["Lon"].mean(),
                       "zoom":2.2,"pitch":30
                     },
-                    "mapStyle":{}
                     "mapStyle": {
                       "styleType": "dark",
                       "topLayerGroups": {},
