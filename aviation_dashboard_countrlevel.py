@@ -507,7 +507,7 @@ elif mode == "Simulation":
                           "visConfig":{
                             "thickness":3,"opacity":0.8,
                             "colorField":{"name":"Δ (%)","type":"real"},
-                            "colorScale":"quantile",
+                            "colorScale":"diverging",
                             "colorRange":{
                               "name":"Global Warming","type":"sequential","category":"Uber",
                               "colors":["#ffffcc","#a1dab4","#41b6c4","#2c7fb8","#253494"]
