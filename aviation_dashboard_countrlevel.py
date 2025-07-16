@@ -7,6 +7,7 @@ from keplergl import KeplerGl
 import streamlit.components.v1 as components
 from scipy.stats import gaussian_kde
 import statsmodels.formula.api as smf   # for regression demo
+from streamlit_keplergl import keplergl_static
 
 # ----------------------
 # Model configuration (defaults)
@@ -530,11 +531,14 @@ elif mode == "Simulation":
                   } 
                 }   
                 map1 = KeplerGl(height=800, width=1600, data={"pairs": pa}, config=cfg)
-                html = map1._repr_html_()
-                if isinstance(html, bytes):
-                    html = html.decode("utf-8")
-
-                components.html(html, height=800, width=1600)
+                 # render it in Streamlit
+                keplergl_static(
+                    map1,
+                    height=800,
+                    width=1600,
+                    center_map=False,    # you already set mapState in cfg
+                    read_only=False      # allow the side panel if you like
+                )
             else:
                 st.warning("Upload coords to see Kepler map.")
 
