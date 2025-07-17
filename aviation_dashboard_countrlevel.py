@@ -588,6 +588,7 @@ elif mode == "Simulation":
 
     if enable_freak:
          df["Passenger Δ (%)"] = -99
+         df["Passengers after policy"] = 0
          
     sub1, sub2 = st.tabs(["Direct effects", "Catalytic effects"])
     with sub1:
