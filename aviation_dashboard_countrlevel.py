@@ -538,7 +538,7 @@ elif mode == "Simulation":
 
     enable_freak = st.checkbox("Trump freaks out")
     if enable_tax: 
-         st.header(🚨🚨🚨🚨)
+         st.header(🚨 🚨 🚨 🚨 🚨)
          air_pass_tax = 100000
     
 
