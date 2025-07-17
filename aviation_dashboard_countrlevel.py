@@ -608,7 +608,7 @@ elif mode == "Simulation":
                 st.metric("Δ Airfare (%)", f"{df['Fare Δ (%)'].mean():.2f}")
             with col4:
                 fis_rev = df["Passengers"]*(df["Carbon cost per pax"] + df["Air passenger tax per pax"])
-                st.metric("Fiscal revenues (€)", f"{df['Fare Δ (%)'].sum():.2f}")
+                st.metric("Fiscal revenues (€)", f"{df['fis_rev'].sum():.2f}")
                 
             # choose ID columns
             if has_airports:
