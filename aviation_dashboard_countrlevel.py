@@ -492,9 +492,9 @@ if mode == "Descriptives":
                     link_colors.append(f"rgba({r},{g},{b},0.4)")
         
                 sankey = go.Sankey(
-                    arrangement="snap",
+                    arrangement="freeform",
                     node=dict(label=labels, pad=15, thickness=20),
-                    link=dict(source=src, target=tgt, value=vals, color=link_colors),
+                    link=dict(source=src, target=tgt, value=vals, color=link_colors),textfont=14 
                 )
                 fig = go.Figure(data=[sankey])
                 title = f"Passenger Flows{' in ' + str(year) if has_year else ''} ({agg_level}-level)"
