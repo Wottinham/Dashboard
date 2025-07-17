@@ -339,18 +339,18 @@ if mode == "Descriptives":
     
         # choose metric and aggregation
         metric = st.selectbox(
-            "Metric", 
-            ["Passengers", "Total Revenue(USD)"], 
+            "Metric",
+            ["Passengers", "Total Revenue(USD)"],
             key="rel_metric"
         )
         agg = st.selectbox(
-            "Aggregation", 
-            ["sum", "mean"], 
+            "Aggregation",
+            ["sum", "mean"],
             key="rel_agg"
         )
     
         # select which origin countries to analyze
-        all_origins      = sorted(df["Origin Country Name"].dropna().unique())
+        all_origins = sorted(df["Origin Country Name"].dropna().unique())
         selected_origins = st.multiselect(
             "Select origin country(ies)",
             all_origins,
@@ -370,23 +370,34 @@ if mode == "Descriptives":
         if not selected_origins:
             st.warning("Please select at least one origin country.")
         else:
-            # create one column per selected origin (they’ll line up horizontally if space allows)
             cols = st.columns(len(selected_origins))
             for col, origin in zip(cols, selected_origins):
                 with col:
-                    # filter for this origin and compute shares
                     df_o = df[df["Origin Country Name"] == origin]
+                    # aggregate
                     d_rel = (
                         df_o
                         .groupby(level, as_index=False)[metric]
                         .agg(agg)
                     )
-                    total = d_rel[metric].sum()
-                    d_rel["Pct"] = d_rel[metric] / total * 100
+                    # sort descending
+                    d_rel = d_rel.sort_values(metric, ascending=False)
     
-                    # pie chart
+                    # take top 9, sum the rest into "Others"
+                    if len(d_rel) > 9:
+                        top9 = d_rel.head(9)
+                        others_sum = d_rel[metric].iloc[9:].sum()
+                        others = pd.DataFrame({level: ["Others"], metric: [others_sum]})
+                        d_plot = pd.concat([top9, others], ignore_index=True)
+                    else:
+                        d_plot = d_rel.copy()
+    
+                    # compute percentages
+                    d_plot["Pct"] = d_plot[metric] / d_plot[metric].sum() * 100
+    
+                    # draw pie (donut)
                     fig = px.pie(
-                        d_rel,
+                        d_plot,
                         names=level,
                         values="Pct",
                         title=f"{origin}: Relative {metric} by {level}",
