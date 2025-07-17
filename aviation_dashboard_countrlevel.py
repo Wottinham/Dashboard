@@ -576,8 +576,7 @@ elif mode == "Simulation":
     )
     df["Fare Δ (%)"] = (df["New Avg Fare"] / df["Avg. Total Fare(USD)"] - 1) * 100
 
-    if enable_freak:
-         df["Fare Δ (%)"] = 100000
+   
         
     fare_factor = (df["New Avg Fare"] / df["Avg. Total Fare(USD)"]) ** price_elast
     df["GDP Growth (%)"]    = df["Origin Country Name"].map(gdp_by_country).fillna(global_gdp)
@@ -586,7 +585,10 @@ elif mode == "Simulation":
     df["Passengers after policy"] = df["Passengers"] * fare_factor * df["GDP Growth Factor"]
     df["Passenger Δ (%)"]         = (df["Passengers after policy"] / df["Passengers"] - 1) * 100
     
-        
+
+    if enable_freak:
+         df["Passenger Δ (%)"] = -99
+         
     sub1, sub2 = st.tabs(["Direct effects", "Catalytic effects"])
     with sub1:
         tab_sim_me, tab_sim_sup = st.tabs(["Market Equilibrium", "Supply"])
