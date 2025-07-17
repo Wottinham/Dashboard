@@ -268,7 +268,7 @@ else:
 if mode == "Descriptives":
     tab_desc_me, tab_desc_sup = st.tabs(["Market Equilibrium", "Supply"])
     with tab_desc_me:
-        st.subheader("📈 Descriptive: Passenger Flow")
+        st.subheader("📈/📊 Passenger numbers and airfares")
 
         metric    = st.selectbox("Metric", ["Passengers", "Avg. Total Fare(USD)"], key="desc_metric")
         plot_type = st.selectbox("Plot type", ["Line", "Bar"], key="desc_plot")
@@ -334,15 +334,20 @@ if mode == "Descriptives":
         if "Origin Country Name" in df.columns:
             st.markdown("---")
             st.subheader("🔀 Sankey: Passenger Flows")
-
-            years = sorted(df["Year"].unique())
-            year  = st.selectbox("Year", years, index=len(years) - 1)
-
+        
+            has_year = "Year" in df.columns
+            if has_year:
+                years = sorted(df["Year"].unique())
+                year = st.selectbox("Year", years, index=len(years) - 1)
+                df_sel = df[df["Year"] == year]
+            else:
+                df_sel = df
+        
             sankey_opts = ["Country"]
             if has_airports:
                 sankey_opts.insert(0, "Airport")
             agg_level = st.selectbox("Aggregation", sankey_opts)
-
+        
             origin_col = (
                 "Origin Airport" if agg_level == "Airport"
                 else "Origin Country Name"
@@ -351,14 +356,14 @@ if mode == "Descriptives":
                 "Destination Airport" if agg_level == "Airport"
                 else "Destination Country Name"
             )
-
+        
             df_year = (
-                df[df["Year"] == year]
-                  .dropna(subset=[origin_col, dest_col])
-                  .groupby([origin_col, dest_col], as_index=False)["Passengers"]
-                  .sum()
+                df_sel
+                .dropna(subset=[origin_col, dest_col])
+                .groupby([origin_col, dest_col], as_index=False)["Passengers"]
+                .sum()
             )
-
+        
             all_origins = sorted(df_year[origin_col].unique())
             selected_origins = st.multiselect(
                 f"Select {agg_level.lower()}s of origin",
@@ -368,14 +373,14 @@ if mode == "Descriptives":
             top_n_dest = st.number_input(
                 "Top N destinations per origin", 1, 50, 5, 1
             )
-
+        
             parts = []
             for orig in selected_origins:
                 sub = df_year[df_year[origin_col] == orig]
                 if not sub.empty:
                     parts.append(sub.nlargest(top_n_dest, "Passengers"))
             flows = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
-
+        
             if flows.empty:
                 st.warning("No flows to display—adjust selections.")
             else:
@@ -385,30 +390,32 @@ if mode == "Descriptives":
                 idx = {lab: i for i, lab in enumerate(labels)}
                 src = flows[origin_col].map(idx).tolist()
                 tgt = flows[dest_col].map(idx).tolist()
-                vals= flows["Passengers"].tolist()
-
-                palette   = px.colors.qualitative.Plotly
-                unique_o  = list(dict.fromkeys(flows[origin_col].tolist()))
+                vals = flows["Passengers"].tolist()
+        
+                palette = px.colors.qualitative.Plotly
+                unique_o = list(dict.fromkeys(flows[origin_col].tolist()))
                 color_map = {o: palette[i % len(palette)] for i, o in enumerate(unique_o)}
                 link_colors = []
                 for o in flows[origin_col]:
                     hexc = color_map[o].lstrip("#")
                     r, g, b = (int(hexc[i:i+2], 16) for i in (0, 2, 4))
                     link_colors.append(f"rgba({r},{g},{b},0.4)")
-
+        
                 sankey = go.Sankey(
                     arrangement="snap",
                     node=dict(label=labels, pad=15, thickness=20),
                     link=dict(source=src, target=tgt, value=vals, color=link_colors),
                 )
                 fig = go.Figure(data=[sankey])
+                title = f"Passenger Flows{' in ' + str(year) if has_year else ''} ({agg_level}-level)"
                 fig.update_layout(
-                    title_text=f"Passenger Flows in {year} ({agg_level}-level)",
+                    title_text=title,
                     font=dict(size=18),
                 )
                 st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("Add a `Year` column to enable the Sankey diagram.")
+            st.info("Add an `Origin Country Name` column to enable the Sankey diagram.")
+
 
     with tab_desc_sup:
         st.subheader("📦 Descriptive: Supply Data (Dummy)")
