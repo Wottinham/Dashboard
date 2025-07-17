@@ -580,7 +580,6 @@ elif mode == "Simulation":
             agg_options = ["Origin Country Name"]
             if has_airports:   agg_options.insert(0, "Origin Airport")
             if has_operating:  agg_options.insert(0, "Operating Airline")
-            level = st.selectbox("Aggregation Level", agg_options)
             
             # build table columns
             table_cols = []
@@ -601,6 +600,8 @@ elif mode == "Simulation":
             ]
             st.dataframe(df[table_cols + metrics], use_container_width=True)
 
+            level = st.selectbox("Aggregation Level", agg_options)
+            
             # Bar chart: passenger change by origin
             ps = df.groupby(level, as_index=False).agg(
                 Passengers=("Passengers","sum"),
