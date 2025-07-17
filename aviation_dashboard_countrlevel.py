@@ -127,9 +127,8 @@ if has_airports:
     if has_distance:
         df = df.dropna(subset=["Distance (km)"])
     else:
-        st.sidebar.warning("No `Distance (km)`—distance‐based metrics disabled.")
-else:
-    st.sidebar.info("No airport columns—airport‐level analyses disabled.")
+        st.warning("No `Distance (km)`—distance‐based metrics disabled.")
+
 
 df = df.reset_index(drop=True)
 
@@ -528,7 +527,7 @@ elif mode == "Simulation":
             carbon_origin = st.multiselect("Carbon taxed: Origin countries", origin_all, default=origin_all)
             carbon_dest   = st.multiselect("Carbon taxed: Destination countries", dest_all,   default=dest_all)
     else:
-        st.sidebar.info("No distance, no carbon simulation")
+        st.info("No distance, no carbon simulation")
 
     enable_tax = st.checkbox("Air passenger tax")
     if enable_tax:
