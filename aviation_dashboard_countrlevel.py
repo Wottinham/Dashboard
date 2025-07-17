@@ -379,7 +379,7 @@ if mode == "Descriptives":
                 rel_levels.append("Origin Airport")
             # when only country‐to‐country data is present, group by destination country
             rel_levels.append("Destination Country Name")
-        
+        with col2:
             level = st.selectbox("Aggregation level", rel_levels, key="rel_level")
     
         if not selected_origins:
