@@ -417,8 +417,46 @@ if mode == "Descriptives":
                 st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("Add an `Origin Country Name` column to enable the Sankey diagram.")
+ 
+
+    
+    with tab_desc_rel:
+        st.subheader("🥧 Relative Passenger numbers and airfares")
+    
+        metric      = st.selectbox("Metric", ["Passengers", "Avg. Total Fare(USD)"], key="rel_metric")
+        agg         = st.selectbox("Aggregation", ["sum", "mean"], key="rel_agg")
+        has_operating = "Operating Airline" in df.columns
+    
+        # build group‐by levels dynamically
+        group_levels = ["Origin Country Name"]
+        if has_airports:
+            group_levels.insert(0, "Origin Airport")
+        if has_operating:
+            group_levels.insert(0, "Operating Airline")
+    
+        level = st.selectbox("Group by", group_levels, key="rel_level")
+    
+        # compute aggregate and relative share
+        d_rel = df.groupby(level, as_index=False)[metric].agg(agg)
+        total = d_rel[metric].sum()
+        d_rel["Percent"] = d_rel[metric] / total * 100
+    
+        # pie chart of relative shares
+        fig = px.pie(
+            d_rel,
+            names=level,
+            values="Percent",
+            title=f"Relative {metric} by {level}",
+            hole=0.3  # optional: makes it a donut
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    
+    
+    
 
 
+    
     with tab_desc_sup:
         st.subheader("📦 Descriptive: Supply Data (Dummy)")
         if has_airports:
