@@ -274,6 +274,7 @@ if mode == "Descriptives":
         plot_type = st.selectbox("Plot type", ["Line", "Bar"], key="desc_plot")
         is_long   = ("Year" in df.columns) or ("Month" in df.columns)
         has_operating = "Operating Airline" in df.columns
+        has_airports = "Origin Airport" in df.columns
 
         # build group‐by levels dynamically
         group_levels = ["Origin Country Name"]
