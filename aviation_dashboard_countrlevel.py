@@ -540,7 +540,7 @@ elif mode == "Simulation":
     if enable_tax: 
          st.markdown(
         "<h2 style='color:red; text-align:center;'>🚨🚨🚨🚨</h2>",
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
         air_pass_tax = 100000
     )
 
