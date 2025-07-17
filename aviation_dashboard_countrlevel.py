@@ -623,7 +623,18 @@ elif mode == "Simulation":
             ]
             st.dataframe(df[table_cols + metrics], use_container_width=True)
 
-            level = st.selectbox("Aggregation Level", agg_options)
+            # Key metrics
+            col1, col2 = st.columns(2)
+            with col1:
+                base_tot = df["Passengers"].sum()
+                new_tot  = df["Passengers after policy"].sum()
+                st.metric("Total Passengers", f"{new_tot:,.0f}",
+                          delta=f"{(new_tot/base_tot-1)*100:+.1f}%")
+            with col2:
+                st.metric("Avg Carbon Cost (€)", f"{df['Carbon cost per pax'].mean():.2f}")
+
+            
+            level = st.selectbox("Aggregation Level for ", agg_options)
             
             # Bar chart: passenger change by origin
             ps = df.groupby(level, as_index=False).agg(
@@ -655,15 +666,7 @@ elif mode == "Simulation":
 
             st.plotly_chart(fig1, use_container_width=True)
 
-            # Key metrics
-            col1, col2 = st.columns(2)
-            with col1:
-                base_tot = df["Passengers"].sum()
-                new_tot  = df["Passengers after policy"].sum()
-                st.metric("Total Passengers", f"{new_tot:,.0f}",
-                          delta=f"{(new_tot/base_tot-1)*100:+.1f}%")
-            with col2:
-                st.metric("Avg Carbon Cost (€)", f"{df['Carbon cost per pax'].mean():.2f}")
+            
 
             # Bar chart: fare change
             # Average fare change: average Fare Δ (%) at level
