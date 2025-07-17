@@ -517,22 +517,24 @@ if mode == "Descriptives":
             st.info("Supply analysis requires airport‐level data.")
 
 elif mode == "Simulation":
-
+    
+    st.subheader("⚙️ Simulation parameters")
+    
     if has_distance:
-        enable_carbon = st.sidebar.checkbox("Enable carbon pricing")
+        enable_carbon = st.checkbox("Enable carbon pricing")
     
         if enable_carbon:
-            ets_price = st.sidebar.slider("Carbon price (EUR/tCO₂)", 0, 400, 100, 5)
-            carbon_origin = st.sidebar.multiselect("Carbon taxed: Origin countries", origin_all, default=origin_all)
-            carbon_dest   = st.sidebar.multiselect("Carbon taxed: Destination countries", dest_all,   default=dest_all)
+            ets_price = st.slider("Carbon price (EUR/tCO₂)", 0, 400, 100, 5)
+            carbon_origin = st.multiselect("Carbon taxed: Origin countries", origin_all, default=origin_all)
+            carbon_dest   = st.multiselect("Carbon taxed: Destination countries", dest_all,   default=dest_all)
     else:
         st.sidebar.info("No distance, no carbon simulation")
 
-    enable_tax = st.sidebar.checkbox("Enable air passenger tax")
+    enable_tax = st.checkbox("Enable air passenger tax")
     if enable_tax:
-        air_pass_tax = st.sidebar.slider("Air Passenger Tax (USD)", 0, 100, 10, 1)
-        tax_origin   = st.sidebar.multiselect("Taxed: Origin countries", origin_all, default=origin_all)
-        tax_dest     = st.sidebar.multiselect("Taxed: Destination countries", dest_all,   default=dest_all)
+        air_pass_tax = st.slider("Air Passenger Tax (USD)", 0, 100, 10, 1)
+        tax_origin   = st.multiselect("Taxed: Origin countries", origin_all, default=origin_all)
+        tax_dest     = st.multiselect("Taxed: Destination countries", dest_all,   default=dest_all)
 
 
 
