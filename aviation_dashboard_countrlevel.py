@@ -163,21 +163,7 @@ mode = st.sidebar.radio("Select mode", ["Descriptives", "Simulation", "Regressio
 # Sidebar – policy & parameter controls (hidden in Descriptives)
 # ----------------------
 if mode != "Descriptives":
-    if has_distance:
-        enable_carbon = st.sidebar.checkbox("Enable carbon pricing")
     
-        if enable_carbon:
-            ets_price = st.sidebar.slider("Carbon price (EUR/tCO₂)", 0, 400, 100, 5)
-            carbon_origin = st.sidebar.multiselect("Carbon taxed: Origin countries", origin_all, default=origin_all)
-            carbon_dest   = st.sidebar.multiselect("Carbon taxed: Destination countries", dest_all,   default=dest_all)
-    else:
-        st.sidebar.info("No distance, no carbon simulation")
-
-    enable_tax = st.sidebar.checkbox("Enable air passenger tax")
-    if enable_tax:
-        air_pass_tax = st.sidebar.slider("Air Passenger Tax (USD)", 0, 100, 10, 1)
-        tax_origin   = st.sidebar.multiselect("Taxed: Origin countries", origin_all, default=origin_all)
-        tax_dest     = st.sidebar.multiselect("Taxed: Destination countries", dest_all,   default=dest_all)
 
     st.sidebar.markdown("### Parameters")
     pass_through    = st.sidebar.slider("Cost pass-through (%)", 0, 100, 80, 5) / 100
@@ -571,6 +557,23 @@ if mode == "Descriptives":
             st.info("Supply analysis requires airport‐level data.")
 
 elif mode == "Simulation":
+
+    if has_distance:
+        enable_carbon = st.sidebar.checkbox("Enable carbon pricing")
+    
+        if enable_carbon:
+            ets_price = st.sidebar.slider("Carbon price (EUR/tCO₂)", 0, 400, 100, 5)
+            carbon_origin = st.sidebar.multiselect("Carbon taxed: Origin countries", origin_all, default=origin_all)
+            carbon_dest   = st.sidebar.multiselect("Carbon taxed: Destination countries", dest_all,   default=dest_all)
+    else:
+        st.sidebar.info("No distance, no carbon simulation")
+
+    enable_tax = st.sidebar.checkbox("Enable air passenger tax")
+    if enable_tax:
+        air_pass_tax = st.sidebar.slider("Air Passenger Tax (USD)", 0, 100, 10, 1)
+        tax_origin   = st.sidebar.multiselect("Taxed: Origin countries", origin_all, default=origin_all)
+        tax_dest     = st.sidebar.multiselect("Taxed: Destination countries", dest_all,   default=dest_all)
+    
     sub1, sub2 = st.tabs(["Direct effects", "Catalytic effects"])
     with sub1:
         tab_sim_me, tab_sim_sup = st.tabs(["Market Equilibrium", "Supply"])
