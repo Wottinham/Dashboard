@@ -618,11 +618,13 @@ elif mode == "Simulation":
                     legend=dict(font=dict(size=20)),  # legend text size
                 )
                 
-                fig1.update_xaxes(
+                
+            fig1.update_xaxes(
                     title_font_size=20,  # x‑axis title
                     tickfont_size=20     # x‑axis tick labels
                 )
-                fig1.update_yaxes(
+                
+            fig1.update_yaxes(
                     title_font_size=20,  # y‑axis title
                     tickfont_size=20     # y‑axis tick labels
                 )
