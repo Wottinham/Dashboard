@@ -369,18 +369,18 @@ if mode == "Descriptives":
                 key="rel_origins"
             )
     
-        # build the possible aggregation‐levels,
-        # always falling back to country‐level if no finer detail exists
-        has_operating = "Operating Airline" in df.columns
-        rel_levels = []
-        if has_operating:
-            rel_levels.append("Operating Airline")
-        if has_airports:
-            rel_levels.append("Origin Airport")
-        # when only country‐to‐country data is present, group by destination country
-        rel_levels.append("Destination Country Name")
-    
-        level = st.selectbox("Aggregation level", rel_levels, key="rel_level")
+            # build the possible aggregation‐levels,
+            # always falling back to country‐level if no finer detail exists
+            has_operating = "Operating Airline" in df.columns
+            rel_levels = []
+            if has_operating:
+                rel_levels.append("Operating Airline")
+            if has_airports:
+                rel_levels.append("Origin Airport")
+            # when only country‐to‐country data is present, group by destination country
+            rel_levels.append("Destination Country Name")
+        
+            level = st.selectbox("Aggregation level", rel_levels, key="rel_level")
     
         if not selected_origins:
             st.warning("Please select at least one origin country.")
