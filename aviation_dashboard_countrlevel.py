@@ -84,7 +84,7 @@ def load_dummy_supply(df: pd.DataFrame) -> pd.DataFrame:
 # ----------------------
 st.set_page_config(page_title="Airport-Pair Simulator", layout="wide")
 st.title("✈️ JETPAS - Joint Economic & Transport Policy Aviation Simulator")
-st.markdown("Simulate air travel between airports and policy impacts.")
+st.markdown("Makes your life easier")
 
 # Sidebar – uploads
 st.sidebar.header("💻 Data & Mode")
@@ -270,14 +270,14 @@ if mode == "Descriptives":
     with tab_desc_me:
         st.subheader("📈/📊 Passenger numbers and airfares")
 
-        metric    = st.selectbox("Metric", ["Passengers", "Avg. Total Fare(USD)"], key="desc_metric")
+        metric    = st.selectbox("Metric", ["Passengers", "Avg. Total Fare(USD)","Total Revenue(USD)"], key="desc_metric")
         plot_type = st.selectbox("Plot type", ["Line", "Bar"], key="desc_plot")
         is_long   = ("Year" in df.columns) or ("Month" in df.columns)
         has_operating = "Operating Airline" in df.columns
         has_airports = "Origin Airport" in df.columns
 
         # build group‐by levels dynamically
-        group_levels = ["Origin Country Name"]
+        group_levels = ["Origin Country Name","Destination Country Name]
         if has_airports:
             group_levels.insert(0, "Origin Airport")
         if has_operating:
