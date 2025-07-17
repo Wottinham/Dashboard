@@ -539,7 +539,7 @@ elif mode == "Simulation":
     enable_freak = st.checkbox("Trump freaks out")
     if enable_freak: 
          st.header("🍊 🍊 🍊")
-         air_pass_tax = 100000
+        
     
 
         # ----------------------
@@ -575,7 +575,10 @@ elif mode == "Simulation":
         + df["Air passenger tax per pax"]
     )
     df["Fare Δ (%)"] = (df["New Avg Fare"] / df["Avg. Total Fare(USD)"] - 1) * 100
-    
+
+    if enable_freak:
+         df["Fare Δ (%)"] = 100000
+        
     fare_factor = (df["New Avg Fare"] / df["Avg. Total Fare(USD)"]) ** price_elast
     df["GDP Growth (%)"]    = df["Origin Country Name"].map(gdp_by_country).fillna(global_gdp)
     df["GDP Growth Factor"] = (1 + df["GDP Growth (%)"]/100) ** gdp_elast
