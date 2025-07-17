@@ -324,6 +324,22 @@ if mode == "Descriptives":
                     markers=True,
                     title=f"{metric} over Time",
                 )
+                
+                fig.update_layout(
+                    font=dict(size=16),               # base font size for title & legend
+                    legend=dict(font=dict(size=14)),  # legend text size
+                )
+                
+                fig.update_xaxes(
+                    title_font_size=16,  # x‑axis title
+                    tickfont_size=14     # x‑axis tick labels
+                )
+                fig.update_yaxes(
+                    title_font_size=16,  # y‑axis title
+                    tickfont_size=14     # y‑axis tick labels
+                )
+
+                
                 st.plotly_chart(fig, use_container_width=True)
 
         else:  # Bar
