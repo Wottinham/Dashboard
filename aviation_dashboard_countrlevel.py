@@ -12,7 +12,7 @@ from streamlit_keplergl import keplergl_static
 # ----------------------
 # Model configuration (defaults)
 # ----------------------
-PRICE_ELASTICITY_DEMAND = -1
+PRICE_ELASTICITY_DEMAND = -1.0
 GDP_ELASTICITY_DEMAND   = 1.4
 
 # ----------------------
