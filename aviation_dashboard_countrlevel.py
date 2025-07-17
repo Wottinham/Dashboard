@@ -342,27 +342,31 @@ if mode == "Descriptives":
         
 
         st.subheader("🥧 Relative Passenger numbers and Total Revenue")
-    
-        # choose metric and aggregation
-        metric = st.selectbox(
-            "Metric",
-            ["Passengers", "Total Revenue(USD)"],
-            key="rel_metric"
-        )
-        agg = st.selectbox(
-            "Aggregation",
-            ["sum", "mean"],
-            key="rel_agg"
-        )
-    
-        # select which origin countries to analyze
-        all_origins = sorted(df["Origin Country Name"].dropna().unique())
-        selected_origins = st.multiselect(
-            "Select origin country(ies)",
-            all_origins,
-            default=all_origins[:5],
-            key="rel_origins"
-        )
+
+        col1, col2 = st.columns(2)
+
+                # put one selectbox in each
+            with col1:
+            # choose metric and aggregation
+            metric = st.selectbox(
+                "Metric",
+                ["Passengers", "Total Revenue(USD)"],
+                key="rel_metric"
+            )
+            agg = st.selectbox(
+                "Aggregation",
+                ["sum", "mean"],
+                key="rel_agg"
+            )
+            with col2:
+            # select which origin countries to analyze
+            all_origins = sorted(df["Origin Country Name"].dropna().unique())
+            selected_origins = st.multiselect(
+                "Select origin country(ies)",
+                all_origins,
+                default=all_origins[:5],
+                key="rel_origins"
+            )
     
         # build the possible aggregation‐levels,
         # always falling back to country‐level if no finer detail exists
