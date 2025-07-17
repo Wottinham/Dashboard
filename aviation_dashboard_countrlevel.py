@@ -346,7 +346,8 @@ if mode == "Descriptives":
         col1, col2 = st.columns(2)
 
                 # put one selectbox in each
-            with col1:
+            
+        with col1:
             # choose metric and aggregation
             metric = st.selectbox(
                 "Metric",
@@ -358,7 +359,7 @@ if mode == "Descriptives":
                 ["sum", "mean"],
                 key="rel_agg"
             )
-            with col2:
+        with col2:
             # select which origin countries to analyze
             all_origins = sorted(df["Origin Country Name"].dropna().unique())
             selected_origins = st.multiselect(
