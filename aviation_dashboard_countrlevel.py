@@ -374,28 +374,25 @@ if mode == "Descriptives":
             for col, origin in zip(cols, selected_origins):
                 with col:
                     df_o = df[df["Origin Country Name"] == origin]
-                    # aggregate
-                    d_rel = (
-                        df_o
-                        .groupby(level, as_index=False)[metric]
-                        .agg(agg)
-                    )
-                    # sort descending
-                    d_rel = d_rel.sort_values(metric, ascending=False)
     
-                    # take top 9, sum the rest into "Others"
+                    # 1) aggregate
+                    d_rel = df_o.groupby(level, as_index=False)[metric].agg(agg)
+    
+                    # 2) pick top 9, everything else → Others
                     if len(d_rel) > 9:
-                        top9 = d_rel.head(9)
-                        others_sum = d_rel[metric].iloc[9:].sum()
-                        others = pd.DataFrame({level: ["Others"], metric: [others_sum]})
-                        d_plot = pd.concat([top9, others], ignore_index=True)
+                        top9 = d_rel.nlargest(9, metric)
+                        others_sum = d_rel.loc[~d_rel[level].isin(top9[level]), metric].sum()
+                        d_plot = pd.concat([
+                            top9,
+                            pd.DataFrame({level: ["Others"], metric: [others_sum]})
+                        ], ignore_index=True)
                     else:
                         d_plot = d_rel.copy()
     
-                    # compute percentages
+                    # 3) compute %
                     d_plot["Pct"] = d_plot[metric] / d_plot[metric].sum() * 100
     
-                    # draw pie (donut)
+                    # 4) draw donut
                     fig = px.pie(
                         d_plot,
                         names=level,
