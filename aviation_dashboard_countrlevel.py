@@ -538,11 +538,9 @@ elif mode == "Simulation":
 
     enable_freak = st.checkbox("Trump freaks out")
     if enable_tax: 
-         st.markdown(
-        "<h2 style='color:red; text-align:center;'>🚨🚨🚨🚨</h2>",
-        unsafe_allow_html=True,
-        air_pass_tax = 100000
-    )
+         st.markdown(🚨🚨🚨🚨)
+         air_pass_tax = 100000
+    
 
         # ----------------------
     # Apply policies to data
