@@ -277,7 +277,7 @@ if mode == "Descriptives":
         has_airports = "Origin Airport" in df.columns
 
         # build group‐by levels dynamically
-        group_levels = ["Origin Country Name","Destination Country Name]
+        group_levels = ["Origin Country Name","Destination Country Name"]
         if has_airports:
             group_levels.insert(0, "Origin Airport")
         if has_operating:
