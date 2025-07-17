@@ -287,10 +287,16 @@ if mode == "Descriptives":
             if not is_long:
                 st.warning("No Year/Month columns—cannot time‐series.")
             else:
-                freq  = st.selectbox("Time frequency", ["Year", "Year-Month"], key="desc_freq")
-                agg   = st.selectbox("Aggregation", ["sum", "mean"], key="desc_agg")
-                level = st.selectbox("Group by", group_levels, key="desc_level")
-                top_n = st.number_input("Top N series", 1, 50, 10, key="desc_n")
+
+                col1, col2 = st.columns(2)
+
+                # put one selectbox in each
+                with col1:
+                    freq  = st.selectbox("Time frequency", ["Year", "Year-Month"], key="desc_freq")
+                    agg   = st.selectbox("Aggregation", ["sum", "mean"], key="desc_agg")
+                with col2:
+                    level = st.selectbox("Group by", group_levels, key="desc_level")
+                    top_n = st.number_input("Top N series", 1, 50, 10, key="desc_n")
 
                 d = df.copy()
                 if freq == "Year-Month" and "Month" in d.columns:
