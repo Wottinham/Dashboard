@@ -327,9 +327,12 @@ if mode == "Descriptives":
                 st.plotly_chart(fig, use_container_width=True)
 
         else:  # Bar
-            agg   = st.selectbox("Aggregation", ["sum", "mean"], key="desc_agg_cs")
-            level = st.selectbox("Group by", group_levels, key="desc_level_cs")
-            top_n = st.number_input("Top N", 1, 50, 10, key="desc_n_cs")
+            with col1:
+                agg   = st.selectbox("Aggregation", ["sum", "mean"], key="desc_agg_cs")
+               
+            with col2:
+                level = st.selectbox("Group by", group_levels, key="desc_level_cs")
+                top_n = st.number_input("Top N", 1, 50, 10, key="desc_n_cs")
 
             d = (
                 df.groupby(level, as_index=False)[metric]
