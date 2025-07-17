@@ -358,13 +358,17 @@ if mode == "Descriptives":
             key="rel_origins"
         )
     
-        # pick the aggregation level
+        # build the possible aggregation‐levels,
+        # always falling back to country‐level if no finer detail exists
         has_operating = "Operating Airline" in df.columns
         rel_levels = []
         if has_operating:
             rel_levels.append("Operating Airline")
         if has_airports:
             rel_levels.append("Origin Airport")
+        # when only country‐to‐country data is present, group by destination country
+        rel_levels.append("Destination Country Name")
+    
         level = st.selectbox("Aggregation level", rel_levels, key="rel_level")
     
         if not selected_origins:
@@ -375,10 +379,11 @@ if mode == "Descriptives":
                 with col:
                     df_o = df[df["Origin Country Name"] == origin]
     
-                    # 1) aggregate
+                    # 1) aggregate at the chosen level
                     d_rel = df_o.groupby(level, as_index=False)[metric].agg(agg)
+                    d_rel = d_rel.sort_values(metric, ascending=False)
     
-                    # 2) pick top 9, everything else → Others
+                    # 2) pick top 9, lump the rest into "Others"
                     if len(d_rel) > 9:
                         top9 = d_rel.nlargest(9, metric)
                         others_sum = d_rel.loc[~d_rel[level].isin(top9[level]), metric].sum()
@@ -389,10 +394,10 @@ if mode == "Descriptives":
                     else:
                         d_plot = d_rel.copy()
     
-                    # 3) compute %
+                    # 3) compute percentage shares
                     d_plot["Pct"] = d_plot[metric] / d_plot[metric].sum() * 100
     
-                    # 4) draw donut
+                    # 4) render as a donut‐style pie chart
                     fig = px.pie(
                         d_plot,
                         names=level,
@@ -401,7 +406,6 @@ if mode == "Descriptives":
                         hole=0.3
                     )
                     st.plotly_chart(fig, use_container_width=True)
-            
         
 
         # Sankey: Passenger Flows 
