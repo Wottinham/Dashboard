@@ -322,7 +322,7 @@ if mode == "Descriptives":
                     y=metric,
                     color=level,
                     markers=True,
-                    title=f"{metric} over Time",
+                    
                 )
                 
                 fig.update_layout(
