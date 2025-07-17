@@ -594,6 +594,17 @@ elif mode == "Simulation":
     with sub1:
         tab_sim_me, tab_sim_sup = st.tabs(["Market Equilibrium", "Supply"])
         with tab_sim_me:
+
+             # Key metrics
+            col1, col2 = st.columns(2)
+            with col1:
+                base_tot = df["Passengers"].sum()
+                new_tot  = df["Passengers after policy"].sum()
+                st.metric("Total Passengers", f"{new_tot:,.0f}",
+                          delta=f"{(new_tot/base_tot-1)*100:+.1f}%")
+            with col2:
+                st.metric("Avg Carbon Cost (€)", f"{df['Carbon cost per pax'].mean():.2f}")
+                
             # choose ID columns
             if has_airports:
                 id_orig, id_dest = "Origin Airport", "Destination Airport"
@@ -623,15 +634,7 @@ elif mode == "Simulation":
             ]
             st.dataframe(df[table_cols + metrics], use_container_width=True)
 
-            # Key metrics
-            col1, col2 = st.columns(2)
-            with col1:
-                base_tot = df["Passengers"].sum()
-                new_tot  = df["Passengers after policy"].sum()
-                st.metric("Total Passengers", f"{new_tot:,.0f}",
-                          delta=f"{(new_tot/base_tot-1)*100:+.1f}%")
-            with col2:
-                st.metric("Avg Carbon Cost (€)", f"{df['Carbon cost per pax'].mean():.2f}")
+           
 
             
             level = st.selectbox("Aggregation Level for ", agg_options)
