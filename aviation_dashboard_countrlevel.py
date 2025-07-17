@@ -330,10 +330,10 @@ if mode == "Descriptives":
             )
             st.plotly_chart(fig, use_container_width=True)
 
-        # Sankey: Passenger Flows by Year
-        if "Year" in df.columns:
+        # Sankey: Passenger Flows 
+        if "Origin Country Name" in df.columns:
             st.markdown("---")
-            st.subheader("🔀 Sankey: Passenger Flows by Year")
+            st.subheader("🔀 Sankey: Passenger Flows")
 
             years = sorted(df["Year"].unique())
             year  = st.selectbox("Year", years, index=len(years) - 1)
