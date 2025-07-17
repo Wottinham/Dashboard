@@ -610,7 +610,7 @@ elif mode == "Simulation":
                 fis_rev = df["Passengers"]*(df["Carbon cost per pax"] + df["Air passenger tax per pax"])
                 fis_rev_sum = fis_rev.sum()
 
-                st.metric("Fiscal revenues (€)", f"{fis_rev:.2f}")
+                st.metric("Fiscal revenues (€)", f"{fis_rev_sum:.2f}")
                 
             # choose ID columns
             if has_airports:
