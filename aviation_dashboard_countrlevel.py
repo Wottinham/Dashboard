@@ -37,6 +37,7 @@ def load_dummy_data() -> pd.DataFrame:
                     "Distance (km)":            int(rng.integers(500, 9000)),
                     "Passengers":               int(rng.integers(50_000, 1_000_000)),
                     "Avg. Total Fare(USD)":     round(rng.uniform(150, 700), 2),
+                    "Total Revenue(USD)":       round(rng.uniform(1500, 7000), 2),
                     "Year":                     int(rng.choice(years)),
                     "Month":                    int(rng.integers(1, 13)),
                 })
