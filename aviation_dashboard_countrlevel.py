@@ -537,7 +537,7 @@ elif mode == "Simulation":
         tax_dest     = st.multiselect("Taxed: Destination countries", dest_all,   default=dest_all)
 
     enable_freak = st.checkbox("Trump freaks out")
-    if enable_tax: 
+    if enable_freak: 
          st.header("🍊 🍊 🍊")
          air_pass_tax = 100000
     
