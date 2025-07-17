@@ -337,34 +337,47 @@ if mode == "Descriptives":
 
         st.subheader("🥧 Relative Passenger numbers and airfares")
     
-        metric      = st.selectbox("Metric", ["Passengers", "Avg. Total Fare(USD)"], key="rel_metric")
-        agg         = st.selectbox("Aggregation", ["sum", "mean"], key="rel_agg")
+        # metric & aggregation choice
+        metric  = st.selectbox("Metric", ["Passengers", "Avg. Total Fare(USD)"], key="rel_metric")
+        agg     = st.selectbox("Aggregation", ["sum", "mean"], key="rel_agg")
+    
+        # filter by origin country
+        all_origins       = sorted(df["Origin Country Name"].dropna().unique())
+        selected_origins  = st.multiselect(
+            "Select origin country(ies)",
+            all_origins,
+            default=all_origins[:5],
+            key="rel_origins"
+        )
+    
+        # aggregation‐level choices
         has_operating = "Operating Airline" in df.columns
-    
-        # build group‐by levels dynamically
-        group_levels = ["Origin Country Name"]
-        if has_airports:
-            group_levels.insert(0, "Origin Airport")
+        rel_levels    = []
         if has_operating:
-            group_levels.insert(0, "Operating Airline")
+            rel_levels.append("Operating Airline")
+        if has_airports:
+            rel_levels.append("Origin Airport")
     
-        level = st.selectbox("Group by", group_levels, key="rel_level")
+        level = st.selectbox("Aggregation level", rel_levels, key="rel_level")
     
-        # compute aggregate and relative share
-        d_rel = df.groupby(level, as_index=False)[metric].agg(agg)
-        total = d_rel[metric].sum()
-        d_rel["Percent"] = d_rel[metric] / total * 100
+        # compute relative shares
+        d_rel = df[df["Origin Country Name"].isin(selected_origins)]
+        d_rel = (d_rel
+                 .groupby(level, as_index=False)[metric]
+                 .agg(agg))
+        total        = d_rel[metric].sum()
+        d_rel["Pct"] = d_rel[metric] / total * 100
     
-        # pie chart of relative shares
+        # pie chart
         fig = px.pie(
             d_rel,
             names=level,
-            values="Percent",
+            values="Pct",
             title=f"Relative {metric} by {level}",
-            hole=0.3  # optional: makes it a donut
+            hole=0.3
         )
         st.plotly_chart(fig, use_container_width=True)
-    
+        
     
 
         # Sankey: Passenger Flows 
