@@ -596,7 +596,7 @@ elif mode == "Simulation":
         with tab_sim_me:
 
              # Key metrics
-            col1, col2 = st.columns(2)
+            col1, col2, col3, col4 = st.columns(4)
             with col1:
                 base_tot = df["Passengers"].sum()
                 new_tot  = df["Passengers after policy"].sum()
@@ -604,6 +604,11 @@ elif mode == "Simulation":
                           delta=f"{(new_tot/base_tot-1)*100:+.1f}%")
             with col2:
                 st.metric("Avg Carbon Cost (€)", f"{df['Carbon cost per pax'].mean():.2f}")
+            with col3:
+                st.metric("Δ Airfare (%)", f"{df['Fare Δ (%)'].mean():.2f}")
+            with col4:
+                fis_rev = df["Passengers"]*(df["Carbon cost per pax"] + df["Air passenger tax per pax"])
+                st.metric("Fiscal revenues (€)", f"{df['Fare Δ (%)'].sum():.2f}")
                 
             # choose ID columns
             if has_airports:
