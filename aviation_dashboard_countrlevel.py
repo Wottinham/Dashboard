@@ -518,10 +518,10 @@ if mode == "Descriptives":
 
 elif mode == "Simulation":
     
-    st.subheader("⚙️ Simulation parameters")
+    st.subheader("⚙️ Whats the scenario?")
     
     if has_distance:
-        enable_carbon = st.checkbox("Enable carbon pricing")
+        enable_carbon = st.checkbox("Carbon pricing")
     
         if enable_carbon:
             ets_price = st.slider("Carbon price (EUR/tCO₂)", 0, 400, 100, 5)
@@ -530,13 +530,15 @@ elif mode == "Simulation":
     else:
         st.sidebar.info("No distance, no carbon simulation")
 
-    enable_tax = st.checkbox("Enable air passenger tax")
+    enable_tax = st.checkbox("Air passenger tax")
     if enable_tax:
         air_pass_tax = st.slider("Air Passenger Tax (USD)", 0, 100, 10, 1)
         tax_origin   = st.multiselect("Taxed: Origin countries", origin_all, default=origin_all)
         tax_dest     = st.multiselect("Taxed: Destination countries", dest_all,   default=dest_all)
 
-
+    enable_freak = st.checkbox("Trump freaks out")
+    if enable_tax: 
+        st.balloons()
 
         # ----------------------
     # Apply policies to data
