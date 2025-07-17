@@ -179,46 +179,6 @@ if mode != "Descriptives":
                 f"{c} GDP growth (%)", -5.0, 8.0, global_gdp, 0.1, key=f"gdp_{c}"
             )
 
-# ----------------------
-# Apply policies to data
-# ----------------------
-# CO2 & carbon cost only if distance exists
-if has_distance:
-    df["CO2 per pax (kg)"]    = df["Distance (km)"] * emission_factor
-    df["Carbon cost per pax"] = 0.0
-    if mode != "Descriptives" and enable_carbon:
-        mask_c = (
-            df["Origin Country Name"].isin(carbon_origin)
-            & df["Destination Country Name"].isin(carbon_dest)
-        )
-        df.loc[mask_c, "Carbon cost per pax"] = (
-            df.loc[mask_c, "CO2 per pax (kg)"] / 1000 * ets_price * pass_through
-        )
-else:
-    df["CO2 per pax (kg)"]    = 0.0
-    df["Carbon cost per pax"] = 0.0
-
-df["Air passenger tax per pax"] = 0.0
-if mode != "Descriptives" and enable_tax:
-    mask_t = (
-        df["Origin Country Name"].isin(tax_origin)
-        & df["Destination Country Name"].isin(tax_dest)
-    )
-    df.loc[mask_t, "Air passenger tax per pax"] = air_pass_tax * pass_through
-
-df["New Avg Fare"] = (
-    df["Avg. Total Fare(USD)"]
-    + df["Carbon cost per pax"]
-    + df["Air passenger tax per pax"]
-)
-df["Fare Δ (%)"] = (df["New Avg Fare"] / df["Avg. Total Fare(USD)"] - 1) * 100
-
-fare_factor = (df["New Avg Fare"] / df["Avg. Total Fare(USD)"]) ** price_elast
-df["GDP Growth (%)"]    = df["Origin Country Name"].map(gdp_by_country).fillna(global_gdp)
-df["GDP Growth Factor"] = (1 + df["GDP Growth (%)"]/100) ** gdp_elast
-
-df["Passengers after policy"] = df["Passengers"] * fare_factor * df["GDP Growth Factor"]
-df["Passenger Δ (%)"]         = (df["Passengers after policy"] / df["Passengers"] - 1) * 100
 
 # ----------------------
 # Coordinates setup (only if airports exist)
@@ -573,7 +533,51 @@ elif mode == "Simulation":
         air_pass_tax = st.sidebar.slider("Air Passenger Tax (USD)", 0, 100, 10, 1)
         tax_origin   = st.sidebar.multiselect("Taxed: Origin countries", origin_all, default=origin_all)
         tax_dest     = st.sidebar.multiselect("Taxed: Destination countries", dest_all,   default=dest_all)
+
+
+
+        # ----------------------
+    # Apply policies to data
+    # ----------------------
+    # CO2 & carbon cost only if distance exists
+    if has_distance:
+        df["CO2 per pax (kg)"]    = df["Distance (km)"] * emission_factor
+        df["Carbon cost per pax"] = 0.0
+        if mode != "Descriptives" and enable_carbon:
+            mask_c = (
+                df["Origin Country Name"].isin(carbon_origin)
+                & df["Destination Country Name"].isin(carbon_dest)
+            )
+            df.loc[mask_c, "Carbon cost per pax"] = (
+                df.loc[mask_c, "CO2 per pax (kg)"] / 1000 * ets_price * pass_through
+            )
+    else:
+        df["CO2 per pax (kg)"]    = 0.0
+        df["Carbon cost per pax"] = 0.0
     
+    df["Air passenger tax per pax"] = 0.0
+    if mode != "Descriptives" and enable_tax:
+        mask_t = (
+            df["Origin Country Name"].isin(tax_origin)
+            & df["Destination Country Name"].isin(tax_dest)
+        )
+        df.loc[mask_t, "Air passenger tax per pax"] = air_pass_tax * pass_through
+    
+    df["New Avg Fare"] = (
+        df["Avg. Total Fare(USD)"]
+        + df["Carbon cost per pax"]
+        + df["Air passenger tax per pax"]
+    )
+    df["Fare Δ (%)"] = (df["New Avg Fare"] / df["Avg. Total Fare(USD)"] - 1) * 100
+    
+    fare_factor = (df["New Avg Fare"] / df["Avg. Total Fare(USD)"]) ** price_elast
+    df["GDP Growth (%)"]    = df["Origin Country Name"].map(gdp_by_country).fillna(global_gdp)
+    df["GDP Growth Factor"] = (1 + df["GDP Growth (%)"]/100) ** gdp_elast
+    
+    df["Passengers after policy"] = df["Passengers"] * fare_factor * df["GDP Growth Factor"]
+    df["Passenger Δ (%)"]         = (df["Passengers after policy"] / df["Passengers"] - 1) * 100
+    
+        
     sub1, sub2 = st.tabs(["Direct effects", "Catalytic effects"])
     with sub1:
         tab_sim_me, tab_sim_sup = st.tabs(["Market Equilibrium", "Supply"])
