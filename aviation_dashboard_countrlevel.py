@@ -12,7 +12,7 @@ from streamlit_keplergl import keplergl_static
 # ----------------------
 # Model configuration (defaults)
 # ----------------------
-PRICE_ELASTICITY_DEMAND = -0.8
+PRICE_ELASTICITY_DEMAND = -1
 GDP_ELASTICITY_DEMAND   = 1.4
 
 # ----------------------
@@ -612,6 +612,21 @@ elif mode == "Simulation":
                 title=f"Passenger Change by {level}"
             )
             fig1.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
+
+            fig1.update_layout(
+                    font=dict(size=20),               # base font size for title & legend
+                    legend=dict(font=dict(size=20)),  # legend text size
+                )
+                
+                fig1.update_xaxes(
+                    title_font_size=20,  # x‑axis title
+                    tickfont_size=20     # x‑axis tick labels
+                )
+                fig1.update_yaxes(
+                    title_font_size=20,  # y‑axis title
+                    tickfont_size=20     # y‑axis tick labels
+                )
+
             st.plotly_chart(fig1, use_container_width=True)
 
             # Key metrics
