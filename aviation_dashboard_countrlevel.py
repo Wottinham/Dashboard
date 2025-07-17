@@ -423,12 +423,17 @@ if mode == "Descriptives":
         # Sankey: Passenger Flows 
         if "Origin Country Name" in df.columns:
             st.markdown("---")
-            st.subheader("🔀 Sankey: Passenger Flows")
-        
+            st.subheader("🔀 Sankey Passenger Flows")
+            
+            col1, col2 = st.columns(2)
+
+                
             has_year = "Year" in df.columns
             if has_year:
                 years = sorted(df["Year"].unique())
-                year = st.selectbox("Year", years, index=len(years) - 1)
+
+                with col1:
+                    year = st.selectbox("Year", years, index=len(years) - 1)
                 df_sel = df[df["Year"] == year]
             else:
                 df_sel = df
@@ -436,7 +441,8 @@ if mode == "Descriptives":
             sankey_opts = ["Country"]
             if has_airports:
                 sankey_opts.insert(0, "Airport")
-            agg_level = st.selectbox("Aggregation", sankey_opts)
+                with col1:
+                    agg_level = st.selectbox("Aggregation", sankey_opts)
         
             origin_col = (
                 "Origin Airport" if agg_level == "Airport"
@@ -455,13 +461,15 @@ if mode == "Descriptives":
             )
         
             all_origins = sorted(df_year[origin_col].unique())
-            selected_origins = st.multiselect(
-                f"Select {agg_level.lower()}s of origin",
-                all_origins,
-                default=all_origins[:5],
-            )
-            top_n_dest = st.number_input(
-                "Top N destinations per origin", 1, 50, 5, 1
+            with col2:
+                selected_origins = st.multiselect(
+                    f"Select {agg_level.lower()}s of origin",
+                    all_origins,
+                    default=all_origins[:5],
+                )
+            with col2:    
+                top_n_dest = st.number_input(
+                    "Top N destinations per origin", 1, 50, 5, 1
             )
         
             parts = []
