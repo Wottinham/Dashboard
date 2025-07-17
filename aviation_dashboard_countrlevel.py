@@ -326,17 +326,17 @@ if mode == "Descriptives":
                 )
                 
                 fig.update_layout(
-                    font=dict(size=16),               # base font size for title & legend
-                    legend=dict(font=dict(size=14)),  # legend text size
+                    font=dict(size=20),               # base font size for title & legend
+                    legend=dict(font=dict(size=20)),  # legend text size
                 )
                 
                 fig.update_xaxes(
-                    title_font_size=16,  # x‑axis title
-                    tickfont_size=14     # x‑axis tick labels
+                    title_font_size=20,  # x‑axis title
+                    tickfont_size=20     # x‑axis tick labels
                 )
                 fig.update_yaxes(
-                    title_font_size=16,  # y‑axis title
-                    tickfont_size=14     # y‑axis tick labels
+                    title_font_size=20,  # y‑axis title
+                    tickfont_size=20     # y‑axis tick labels
                 )
 
                 
