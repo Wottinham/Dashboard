@@ -273,6 +273,7 @@ if mode == "Descriptives":
         metric    = st.selectbox("Metric", ["Passengers", "Avg. Total Fare(USD)"], key="desc_metric")
         plot_type = st.selectbox("Plot type", ["Line", "Bar"], key="desc_plot")
         is_long   = ("Year" in df.columns) or ("Month" in df.columns)
+        has_operating = "Operating Airline" in df.columns
 
         # build group‐by levels dynamically
         group_levels = ["Origin Country Name"]
