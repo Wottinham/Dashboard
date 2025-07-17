@@ -435,7 +435,7 @@ if mode == "Descriptives":
                         d_plot,
                         names=level,
                         values="Pct",
-                        title=f"{origin}: Relative {metric} by {level}",
+                        title=f"{origin}",
                         hole=0.3
                     )
                     st.plotly_chart(fig, use_container_width=True)
@@ -533,9 +533,7 @@ if mode == "Descriptives":
                     selector=dict(type="sankey")
                     )
                 
-                title = f"Passenger Flows{' in ' + str(year) if has_year else ''} ({agg_level}-level)"
                 fig.update_layout(
-                    title_text=title,
                     font=dict(size=18),
                 )
                 st.plotly_chart(fig, use_container_width=True)
