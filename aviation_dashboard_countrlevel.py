@@ -270,9 +270,11 @@ if mode == "Descriptives":
     tab_desc_me, tab_desc_sup = st.tabs(["Market Equilibrium", "Supply"])
     with tab_desc_me:
         st.subheader("📈/📊 Passenger numbers and airfares")
-
-        metric    = st.selectbox("Metric", ["Passengers", "Avg. Total Fare(USD)","Total Revenue(USD)"], key="desc_metric")
-        plot_type = st.selectbox("Plot type", ["Line", "Bar"], key="desc_plot")
+        col1, col2 = st.columns(2)
+        with col1:
+            metric    = st.selectbox("Metric", ["Passengers", "Avg. Total Fare(USD)","Total Revenue(USD)"], key="desc_metric")
+        with col2:    
+            plot_type = st.selectbox("Plot type", ["Line", "Bar"], key="desc_plot")
         is_long   = ("Year" in df.columns) or ("Month" in df.columns)
         has_operating = "Operating Airline" in df.columns
         has_airports = "Origin Airport" in df.columns
