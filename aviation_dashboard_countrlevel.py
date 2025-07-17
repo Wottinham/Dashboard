@@ -335,50 +335,66 @@ if mode == "Descriptives":
 
         
 
-        st.subheader("🥧 Relative Passenger numbers and airfares")
+        st.subheader("🥧 Relative Passenger numbers and Total Revenue")
     
-        # metric & aggregation choice
-        metric  = st.selectbox("Metric", ["Passengers", "Avg. Total Fare(USD)"], key="rel_metric")
-        agg     = st.selectbox("Aggregation", ["sum", "mean"], key="rel_agg")
+        # choose metric and aggregation
+        metric = st.selectbox(
+            "Metric", 
+            ["Passengers", "Total Revenue(USD)"], 
+            key="rel_metric"
+        )
+        agg = st.selectbox(
+            "Aggregation", 
+            ["sum", "mean"], 
+            key="rel_agg"
+        )
     
-        # filter by origin country
-        all_origins       = sorted(df["Origin Country Name"].dropna().unique())
-        selected_origins  = st.multiselect(
+        # select which origin countries to analyze
+        all_origins      = sorted(df["Origin Country Name"].dropna().unique())
+        selected_origins = st.multiselect(
             "Select origin country(ies)",
             all_origins,
             default=all_origins[:5],
             key="rel_origins"
         )
     
-        # aggregation‐level choices
+        # pick the aggregation level
         has_operating = "Operating Airline" in df.columns
-        rel_levels    = []
+        rel_levels = []
         if has_operating:
             rel_levels.append("Operating Airline")
         if has_airports:
             rel_levels.append("Origin Airport")
-    
         level = st.selectbox("Aggregation level", rel_levels, key="rel_level")
     
-        # compute relative shares
-        d_rel = df[df["Origin Country Name"].isin(selected_origins)]
-        d_rel = (d_rel
-                 .groupby(level, as_index=False)[metric]
-                 .agg(agg))
-        total        = d_rel[metric].sum()
-        d_rel["Pct"] = d_rel[metric] / total * 100
+        if not selected_origins:
+            st.warning("Please select at least one origin country.")
+        else:
+            # create one column per selected origin (they’ll line up horizontally if space allows)
+            cols = st.columns(len(selected_origins))
+            for col, origin in zip(cols, selected_origins):
+                with col:
+                    # filter for this origin and compute shares
+                    df_o = df[df["Origin Country Name"] == origin]
+                    d_rel = (
+                        df_o
+                        .groupby(level, as_index=False)[metric]
+                        .agg(agg)
+                    )
+                    total = d_rel[metric].sum()
+                    d_rel["Pct"] = d_rel[metric] / total * 100
     
-        # pie chart
-        fig = px.pie(
-            d_rel,
-            names=level,
-            values="Pct",
-            title=f"Relative {metric} by {level}",
-            hole=0.3
-        )
-        st.plotly_chart(fig, use_container_width=True)
+                    # pie chart
+                    fig = px.pie(
+                        d_rel,
+                        names=level,
+                        values="Pct",
+                        title=f"{origin}: Relative {metric} by {level}",
+                        hole=0.3
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+            
         
-    
 
         # Sankey: Passenger Flows 
         if "Origin Country Name" in df.columns:
