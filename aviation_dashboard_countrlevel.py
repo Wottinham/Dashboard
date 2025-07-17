@@ -497,6 +497,13 @@ if mode == "Descriptives":
                     link=dict(source=src, target=tgt, value=vals, color=link_colors)
                 )
                 fig = go.Figure(data=[sankey])
+
+                fig.update_traces(
+                    textfont_shadow="none",
+                    textfont_color="black",
+                    selector=dict(type="sankey")
+                    )
+                
                 title = f"Passenger Flows{' in ' + str(year) if has_year else ''} ({agg_level}-level)"
                 fig.update_layout(
                     title_text=title,
