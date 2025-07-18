@@ -289,7 +289,7 @@ if mode == "Descriptives":
                 )
 
                 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True,"scale": 3  )
 
         else:  # Bar
             with col1:
