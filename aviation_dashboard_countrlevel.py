@@ -545,7 +545,7 @@ elif mode == "Simulation":
             carbon_origin = st.multiselect("Carbon taxed: Origin countries", origin_all, default=origin_all)
             carbon_dest   = st.multiselect("Carbon taxed: Destination countries", dest_all,   default=dest_all)
     else:
-        st.info("No distance, no carbon simulation")
+        st.info("No distance in passenger data, no carbon simulation")
 
     enable_tax = st.checkbox("Air passenger tax")
     if enable_tax:
