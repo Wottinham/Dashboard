@@ -289,7 +289,12 @@ if mode == "Descriptives":
                 )
 
                 
-                st.plotly_chart(fig, use_container_width=True,"scale": 3  )
+                st.plotly_chart(fig, use_container_width=True,config={
+                "toImageButtonOptions": {
+                    "format": "png",    # one of png, jpeg, svg, webp
+                    "filename": "hhi_plot",
+                    "scale": 3}
+            }     )
 
         else:  # Bar
             with col1:
