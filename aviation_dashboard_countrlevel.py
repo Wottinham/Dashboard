@@ -658,55 +658,70 @@ elif mode == "Simulation":
             ]
             st.dataframe(df[table_cols + metrics], use_container_width=True)
 
-           
+            col1, col2 = st.columns(2)
 
+            with col1:
+                # choose aggregation level (e.g. Operating Airline or Origin Airport)
+                level = st.selectbox("Aggregation Level", agg_options)
             
-            level = st.selectbox("Aggregation Level for ", agg_options)
+            with col2:
+                # choose how many top categories to show based on total pre‑policy passengers
+                top_n = st.number_input(
+                    "Top N by passengers", min_value=1, max_value=50, value=10, step=1
+                )
             
             # Bar chart: passenger change by origin
             ps = df.groupby(level, as_index=False).agg(
-                Passengers=("Passengers","sum"),
-                After=("Passengers after policy","sum")
+                Passengers=("Passengers", "sum"),
+                After=("Passengers after policy", "sum")
             )
-            ps["Δ (%)"] = (ps["After"]/ps["Passengers"] - 1)*100
+            ps["Δ (%)"] = (ps["After"] / ps["Passengers"] - 1) * 100
+            
+            # select only the top N categories by original passenger count
+            top_categories = ps.nlargest(top_n, "Passengers")[level]
+            ps = ps[ps[level].isin(top_categories)]
+            
             fig1 = px.bar(
-                ps, x=level, y="Δ (%)", text="Δ (%)",
-                title=f"Passenger Change by {level}"
+                ps,
+                x=level,
+                y="Δ (%)",
+                text="Δ (%)",
+                title=f"Passenger Change by {level} (Top {top_n})"
             )
             fig1.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
-
             fig1.update_layout(
-                    font=dict(size=20),               # base font size for title & legend
-                    legend=dict(font=dict(size=20)),  # legend text size
-                )
-                
-                
-            fig1.update_xaxes(
-                    title_font_size=20,  # x‑axis title
-                    tickfont_size=20     # x‑axis tick labels
-                )
-                
-            fig1.update_yaxes(
-                    title_font_size=20,  # y‑axis title
-                    tickfont_size=20     # y‑axis tick labels
-                )
-
-            st.plotly_chart(fig1, use_container_width=True)
-
-            
-
-            # Bar chart: fare change
-            # Average fare change: average Fare Δ (%) at level
-            pf = df.groupby(level, as_index=False).agg(
-                **{"Avg Δ (%)":("Fare Δ (%)","mean")}
+                font=dict(size=20),
+                legend=dict(font=dict(size=20)),
             )
+            fig1.update_xaxes(title_font_size=20, tickfont_size=20)
+            fig1.update_yaxes(title_font_size=20, tickfont_size=20)
+            st.plotly_chart(fig1, use_container_width=True)
+            
+            # Bar chart: fare change
+            pf = df.groupby(level, as_index=False).agg(
+                **{"Avg Δ (%)": ("Fare Δ (%)", "mean")}
+            )
+            
+            # apply the same top‐N filter so charts align
+            pf = pf[pf[level].isin(top_categories)]
+            
             fig2 = px.bar(
-                pf, x=level, y="Avg Δ (%)", text="Avg Δ (%)",
-                title=f"Average Fare Change by {level}"
+                pf,
+                x=level,
+                y="Avg Δ (%)",
+                text="Avg Δ (%)",
+                title=f"Average Fare Change by {level} (Top {top_n})"
             )
             fig2.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
+            fig2.update_layout(
+                font=dict(size=20),
+                legend=dict(font=dict(size=20)),
+            )
+            fig2.update_xaxes(title_font_size=20, tickfont_size=20)
+            fig2.update_yaxes(title_font_size=20, tickfont_size=20)
             st.plotly_chart(fig2, use_container_width=True)
             
+                        
 
             # Distance KDE scaled by passenger count (only if distance exists)
             if has_distance:
