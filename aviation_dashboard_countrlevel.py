@@ -279,8 +279,8 @@ if mode == "Descriptives":
                 )
                 
                 fig.update_layout(
-                    font=dict(size=20),               # base font size for title & legend
-                    legend=dict(font=dict(size=30)),  # legend text size
+                    font=dict(size=20),legend_title_font_size=20,                 # base font size for title & legend
+                    legend=dict(font=dict(size=20)),  # legend text size
                 )
                 
                 fig.update_xaxes(
