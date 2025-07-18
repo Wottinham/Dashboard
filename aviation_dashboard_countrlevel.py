@@ -536,28 +536,30 @@ if mode == "Descriptives":
 elif mode == "Simulation":
     
     st.subheader("⚙️ Whats the scenario?")
-    
-    if has_distance:
-        enable_carbon = st.checkbox("Carbon pricing")
-    
-        if enable_carbon:
-            ets_price = st.slider("Carbon price (EUR/tCO₂)", 0, 400, 100, 5)
-            carbon_origin = st.multiselect("Carbon taxed: Origin countries", origin_all, default=origin_all)
-            carbon_dest   = st.multiselect("Carbon taxed: Destination countries", dest_all,   default=dest_all)
-    else:
-        st.info("No distance in passenger data, no carbon simulation")
 
-    enable_tax = st.checkbox("Air passenger tax")
-    if enable_tax:
-        air_pass_tax = st.slider("Air Passenger Tax (USD)", 0, 100, 10, 1)
-        tax_origin   = st.multiselect("Taxed: Origin countries", origin_all, default=origin_all)
-        tax_dest     = st.multiselect("Taxed: Destination countries", dest_all,   default=dest_all)
-
-    enable_freak = st.checkbox("Trump freaks out")
-    if enable_freak: 
-         st.header("🍊 🍊 🍊")
+    col1, col2 = st.columns(2)
+    with col1:
+        if has_distance:
+            enable_carbon = st.checkbox("Carbon pricing")
         
+            if enable_carbon:
+                ets_price = st.slider("Carbon price (EUR/tCO₂)", 0, 400, 100, 5)
+                carbon_origin = st.multiselect("Carbon taxed: Origin countries", origin_all, default=origin_all)
+                carbon_dest   = st.multiselect("Carbon taxed: Destination countries", dest_all,   default=dest_all)
+        else:
+            st.info("No distance in passenger data, no carbon simulation")
     
+        enable_tax = st.checkbox("Air passenger tax")
+        if enable_tax:
+            air_pass_tax = st.slider("Air Passenger Tax (USD)", 0, 100, 10, 1)
+            tax_origin   = st.multiselect("Taxed: Origin countries", origin_all, default=origin_all)
+            tax_dest     = st.multiselect("Taxed: Destination countries", dest_all,   default=dest_all)
+    with col2: 
+        enable_freak = st.checkbox("Trump freaks out")
+        if enable_freak: 
+             st.header("🍊 🍊 🍊")
+            
+   
 
         # ----------------------
     # Apply policies to data
