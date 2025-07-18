@@ -293,7 +293,7 @@ if mode == "Descriptives":
                 "toImageButtonOptions": {
                     "format": "png",    # one of png, jpeg, svg, webp
                     "filename": "hhi_plot",
-                    "scale": 3}
+                    "scale": 6}
             }     )
 
         else:  # Bar
