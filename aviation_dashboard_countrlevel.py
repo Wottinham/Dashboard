@@ -658,14 +658,20 @@ elif mode == "Simulation":
             ]
             st.dataframe(df[table_cols + metrics], use_container_width=True)
 
+           # determine available aggregation options
+            has_operating = "Operating Airline" in df.columns
+            agg_options = []
+            if has_operating:
+                agg_options.append("Operating Airline")
+            if has_airports:
+                agg_options.append("Origin Airport")
+            
             col1, col2 = st.columns(2)
-
+            
             with col1:
-                # choose aggregation level (e.g. Operating Airline or Origin Airport)
                 level = st.selectbox("Aggregation Level", agg_options)
             
             with col2:
-                # choose how many top categories to show based on total pre‑policy passengers
                 top_n = st.number_input(
                     "Top N by passengers", min_value=1, max_value=50, value=10, step=1
                 )
@@ -688,7 +694,7 @@ elif mode == "Simulation":
                 text="Δ (%)",
                 title=f"Passenger Change by {level} (Top {top_n})"
             )
-            fig1.update_traces(texttemplate="%{text:.1f}%", textposition="auto")
+            fig1.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
             fig1.update_layout(
                 font=dict(size=20),
                 legend=dict(font=dict(size=20)),
@@ -701,8 +707,6 @@ elif mode == "Simulation":
             pf = df.groupby(level, as_index=False).agg(
                 **{"Avg Δ (%)": ("Fare Δ (%)", "mean")}
             )
-            
-            # apply the same top‐N filter so charts align
             pf = pf[pf[level].isin(top_categories)]
             
             fig2 = px.bar(
@@ -712,7 +716,7 @@ elif mode == "Simulation":
                 text="Avg Δ (%)",
                 title=f"Average Fare Change by {level} (Top {top_n})"
             )
-            fig2.update_traces(texttemplate="%{text:.1f}%", textposition="auto")
+            fig2.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
             fig2.update_layout(
                 font=dict(size=20),
                 legend=dict(font=dict(size=20)),
@@ -720,6 +724,7 @@ elif mode == "Simulation":
             fig2.update_xaxes(title_font_size=20, tickfont_size=20)
             fig2.update_yaxes(title_font_size=20, tickfont_size=20)
             st.plotly_chart(fig2, use_container_width=True)
+
             
                         
 
