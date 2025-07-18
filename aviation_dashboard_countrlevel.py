@@ -137,6 +137,41 @@ origin_all = sorted(df["Origin Country Name"].dropna().astype(str).unique())
 dest_all   = sorted(df["Destination Country Name"].dropna().astype(str).unique())
 panel_data = "Year" in df.columns
 
+
+# ----------------------
+# Coordinates setup (only if airports exist)
+# ----------------------
+df["Origin Lat"] = np.nan; df["Origin Lon"] = np.nan
+df["Dest Lat"]   = np.nan; df["Dest Lon"]   = np.nan
+
+if has_airports:
+    if coord_file:
+        try:
+            coords = pd.read_excel(coord_file, engine="openpyxl").drop_duplicates("IATA_Code")
+        except ImportError:
+            st.sidebar.warning("Install openpyxl to read .xlsx")
+            coords = load_dummy_coords(df)
+        except Exception as e:
+            st.sidebar.warning(f"Failed coords processing: {e}")
+            coords = load_dummy_coords(df)
+    else:
+        coords = load_dummy_coords(df)
+        st.sidebar.info("No coords file – using dummy coords.")
+
+    if {"IATA_Code", "DecLat", "DecLon"}.issubset(coords.columns):
+        cmap = coords.set_index("IATA_Code")[["DecLat", "DecLon"]]
+        df["Origin Code"] = df["Origin Airport"].str.partition("-")[0]
+        df["Dest Code"]   = df["Destination Airport"].str.partition("-")[0]
+        df["Origin Lat"]  = df["Origin Code"].map(cmap["DecLat"])
+        df["Origin Lon"]  = df["Origin Code"].map(cmap["DecLon"])
+        df["Dest Lat"]    = df["Dest Code"].map(cmap["DecLat"])
+        df["Dest Lon"]    = df["Dest Code"].map(cmap["DecLon"])
+    else:
+        st.sidebar.warning("Coords missing required columns – using dummy coords")
+else:
+    st.sidebar.info("Skipping coordinates – no airport data available")
+    
+
 # ----------------------
 # Default policy parameters
 # ----------------------
@@ -179,38 +214,7 @@ if mode != "Descriptives":
             )
 
 
-# ----------------------
-# Coordinates setup (only if airports exist)
-# ----------------------
-df["Origin Lat"] = np.nan; df["Origin Lon"] = np.nan
-df["Dest Lat"]   = np.nan; df["Dest Lon"]   = np.nan
 
-if has_airports:
-    if coord_file:
-        try:
-            coords = pd.read_excel(coord_file, engine="openpyxl").drop_duplicates("IATA_Code")
-        except ImportError:
-            st.sidebar.warning("Install openpyxl to read .xlsx")
-            coords = load_dummy_coords(df)
-        except Exception as e:
-            st.sidebar.warning(f"Failed coords processing: {e}")
-            coords = load_dummy_coords(df)
-    else:
-        coords = load_dummy_coords(df)
-        st.sidebar.info("No coords file – using dummy coords.")
-
-    if {"IATA_Code", "DecLat", "DecLon"}.issubset(coords.columns):
-        cmap = coords.set_index("IATA_Code")[["DecLat", "DecLon"]]
-        df["Origin Code"] = df["Origin Airport"].str.partition("-")[0]
-        df["Dest Code"]   = df["Destination Airport"].str.partition("-")[0]
-        df["Origin Lat"]  = df["Origin Code"].map(cmap["DecLat"])
-        df["Origin Lon"]  = df["Origin Code"].map(cmap["DecLon"])
-        df["Dest Lat"]    = df["Dest Code"].map(cmap["DecLat"])
-        df["Dest Lon"]    = df["Dest Code"].map(cmap["DecLon"])
-    else:
-        st.sidebar.warning("Coords missing required columns – using dummy coords")
-else:
-    st.sidebar.info("Skipping coordinates – no airport data available")
 
 # ----------------------
 # Main area by mode
