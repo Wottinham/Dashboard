@@ -537,7 +537,7 @@ elif mode == "Simulation":
     
     st.subheader("⚙️ Whats the scenario?")
 
-    col1, col2 = st.columns(2)
+    col1, col2,col3,col4 = st.columns(4)
     with col1:
         if has_distance:
             enable_carbon = st.checkbox("Carbon pricing")
