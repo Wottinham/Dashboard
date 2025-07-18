@@ -694,7 +694,7 @@ elif mode == "Simulation":
                 text="Δ (%)",
                 title=f"Passenger Change by {level} (Top {top_n})"
             )
-            fig1.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
+            fig1.update_traces(texttemplate="%{text:.1f}%", textposition="auto")
             fig1.update_layout(
                 font=dict(size=20),
                 legend=dict(font=dict(size=20)),
@@ -716,7 +716,7 @@ elif mode == "Simulation":
                 text="Avg Δ (%)",
                 title=f"Average Fare Change by {level} (Top {top_n})"
             )
-            fig2.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
+            fig2.update_traces(texttemplate="%{text:.1f}%", textposition="auto")
             fig2.update_layout(
                 font=dict(size=20),
                 legend=dict(font=dict(size=20)),
