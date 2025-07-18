@@ -429,8 +429,8 @@ if mode == "Descriptives":
             sankey_opts = ["Country"]
             if has_airports:
                 sankey_opts.insert(0, "Airport")
-                with col1:
-                    agg_level = st.selectbox("Aggregation", sankey_opts)
+            with col1:
+                agg_level = st.selectbox("Aggregation", sankey_opts)
         
             origin_col = (
                 "Origin Airport" if agg_level == "Airport"
