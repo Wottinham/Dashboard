@@ -288,11 +288,20 @@ if mode == "Descriptives":
                     tickfont_size=20     # y‑axis tick labels
                 )
 
+                fig.update_layout(
+                    margin=dict(
+                        l=60,   # left
+                        r=60,   # right
+                        t=80,   # top
+                        b=60    # bottom
+                    )
+                )
+
                 
                 st.plotly_chart(fig, use_container_width=True,config={
                 "toImageButtonOptions": {
                     "format": "png",    # one of png, jpeg, svg, webp
-                    "filename": "hhi_plot",
+                    "filename": "desc_1",
                     "scale": 6}
             }     )
 
